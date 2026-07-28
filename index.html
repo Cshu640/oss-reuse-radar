@@ -22,7 +22,7 @@
       </nav>
       <p class="side-title">兴趣分类</p>
       <div id="categories"></div>
-      <footer><span>● 免费 API 模式</span><small>GitHub · Hugging Face · 本地收藏</small></footer>
+      <footer><span>● 免费 API 模式</span><small>GitHub · Hugging Face · GitLab · Codeberg · Gitee · ModelScope</small></footer>
     </aside>
 
     <main>
@@ -41,23 +41,26 @@
         <div class="toolbar">
           <div class="tabs"><button class="tab active" data-period="today">今日潜力</button><button class="tab" data-period="week">7天热点</button><button class="tab" data-period="month">30天雷达</button><button class="tab" data-period="rising">低 Star 高潜力</button></div>
           <div class="filters">
-            <select id="platform"><option value="all">全部平台</option><option value="github">GitHub</option><option value="huggingface">Hugging Face</option></select>
+            <select id="platform"><option value="all">全部平台</option><option value="github">GitHub</option><option value="huggingface">Hugging Face</option><option value="gitlab">GitLab</option><option value="codeberg">Codeberg</option><option value="gitee">Gitee</option><option value="modelscope">ModelScope</option></select>
             <select id="license"><option value="all">全部许可证</option><option value="commercial">优先可商用</option><option value="unknown">待核查</option></select>
             <select id="useType"><option value="all">全部用途</option><option value="direct">直接安装使用</option><option value="selfhost">适合个人部署</option><option value="codex">Codex二次开发</option><option value="component">技术组件</option><option value="reference">模仿产品设计</option><option value="business">商业化机会</option></select>
           </div>
         </div>
         <div class="section-title"><div><h2 id="radarTitle">今日潜力项目</h2><p id="radarDesc">代理潜力分不等于真实24小时涨幅；真实增长将在历史快照阶段实现。</p></div><span id="status">准备加载</span></div>
+        <div id="sourceHealth" class="source-health" aria-label="平台数据源状态"></div>
         <div id="projectGrid" class="grid"></div>
       </section>
 
       <section id="searchView" class="view">
-        <div class="page-title"><em>INSPIRATION SEARCH</em><h1>有灵感，马上跨平台搜索</h1><p>输入中文自然语言需求，自动扩展为英文技术关键词，再搜索 GitHub 与 Hugging Face。</p></div>
+        <div class="page-title"><em>INSPIRATION SEARCH</em><h1>有灵感，马上跨平台搜索</h1><p>输入中文自然语言需求，自动扩展为英文技术关键词，再并行搜索六个开源平台。</p></div>
         <form id="searchForm" class="search-box">
           <textarea id="query" placeholder="例如：寻找适合网页游戏、允许商用、TypeScript可接入的NPC长期记忆系统"></textarea>
-          <div><label><input id="useGitHub" type="checkbox" checked> GitHub</label><label><input id="useHF" type="checkbox" checked> Hugging Face</label><select id="sort"><option value="score">综合潜力</option><option value="popular">Star / Like</option><option value="fresh">最近更新</option></select><button class="primary">开始搜索</button></div>
+          <div class="search-controls"><div class="source-select"><label><input type="checkbox" data-search-platform="github" checked> GitHub</label><label><input type="checkbox" data-search-platform="huggingface" checked> Hugging Face</label><label><input type="checkbox" data-search-platform="gitlab" checked> GitLab</label><label><input type="checkbox" data-search-platform="codeberg" checked> Codeberg</label><label title="公开搜索接口可能不稳定"><input type="checkbox" data-search-platform="gitee" checked> Gitee <small>实验</small></label><label title="公开读取或跨域策略可能变化"><input type="checkbox" data-search-platform="modelscope" checked> ModelScope <small>实验</small></label></div><select id="sort"><option value="score">综合潜力</option><option value="popular">Star / Like</option><option value="fresh">最近更新</option></select><button class="primary">开始搜索</button></div>
         </form>
         <div id="suggestions" class="chips"></div>
         <p id="searchSummary"></p>
+        <div id="searchSources" class="source-health" aria-label="搜索数据源状态"></div>
+        <div id="searchFallbacks" class="chips search-fallbacks"></div>
         <div id="searchGrid" class="grid"></div>
       </section>
 
@@ -70,7 +73,7 @@
 
       <section id="watchView" class="view">
         <div class="page-title"><em>NEXT PHASE</em><h1>观察名单与真实增长</h1><p>下一阶段将保存历史快照，计算真正的24小时、7天与30天增速。</p></div>
-        <article class="roadmap"><h3>后续路线</h3><ul><li>Supabase 项目库与历史快照</li><li>GitHub Actions 每6小时自动采集</li><li>真实 Star、Fork、下载增长曲线</li><li>收藏云同步和多设备访问</li><li>ecosyste.ms、GitLab、Codeberg 数据源</li></ul></article>
+        <article class="roadmap"><h3>后续路线</h3><ul><li>六平台适配器健康度与失败降级</li><li>Supabase 项目库与历史快照</li><li>GitHub Actions 每6小时自动采集</li><li>真实 Star、Fork、Like、下载增长曲线</li><li>收藏云同步、ecosyste.ms 与软件包生态</li></ul></article>
       </section>
     </main>
   </div>

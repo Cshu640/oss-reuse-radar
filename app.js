@@ -1,5 +1,7 @@
+import { platformCatalog, platformIds, radarPlatform, searchPlatform } from './platform-adapters.js';
+
 const FAVORITES_KEY = 'openradar:favorites:v1';
-const RADAR_CACHE_KEY = 'openradar:radar-cache:v2';
+const RADAR_CACHE_KEY = 'openradar:radar-cache:v3';
 const RADAR_CACHE_TTL = 15 * 60 * 1000;
 
 const categories = [
@@ -151,6 +153,8 @@ const state = {
   period: 'today',
   install: null,
   lastSearchPlan: null,
+  sourceStatus: {},
+  searchSourceStatus: {},
 };
 
 const $ = (id) => document.getElementById(id);
@@ -174,15 +178,18 @@ function loadRadarCache() {
   try {
     const cache = JSON.parse(localStorage.getItem(RADAR_CACHE_KEY) || 'null');
     if (!cache || !Array.isArray(cache.projects) || Date.now() - cache.savedAt > RADAR_CACHE_TTL) return null;
-    return cache.projects.map(normalizeProject);
+    return {
+      projects: cache.projects.map(normalizeProject),
+      sourceStatus: cache.sourceStatus || {},
+    };
   } catch {
     return null;
   }
 }
 
-function saveRadarCache(projects) {
+function saveRadarCache(projects, sourceStatus) {
   try {
-    localStorage.setItem(RADAR_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), projects }));
+    localStorage.setItem(RADAR_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), projects, sourceStatus }));
   } catch {
     // 缓存失败不影响主流程。
   }
@@ -271,11 +278,32 @@ function normalizeProject(project) {
   return normalized;
 }
 
+function platformMeta(projectOrId) {
+  const id = typeof projectOrId === 'string' ? projectOrId : projectOrId?.platform;
+  return platformCatalog[id] || {
+    label: id || '未知平台',
+    primaryField: 'stars',
+    primaryLabel: 'Stars',
+    secondaryField: 'forks',
+    secondaryLabel: 'Forks',
+  };
+}
+
+function metricValue(project, field) {
+  return Number(project?.[field] || 0);
+}
+
+function projectPopularity(project) {
+  const meta = platformMeta(project);
+  return metricValue(project, meta.primaryField);
+}
+
 function potentialScore(project) {
   if (project.score) return project.score;
-  const popularity = project.platform === 'huggingface'
-    ? (project.likes || 0) + Math.log10((project.downloads || 0) + 1) * 25
-    : (project.stars || 0);
+  const meta = platformMeta(project);
+  const primary = metricValue(project, meta.primaryField);
+  const secondary = metricValue(project, meta.secondaryField);
+  const popularity = primary + Math.log10(secondary + 1) * 18;
   const freshness = Math.max(0, 25 - Math.min(25, (Date.now() - new Date(project.updatedAt || 0)) / 864e5));
   return Math.min(99, Math.round(Math.log10(popularity + 1) * 22 / Math.pow(projectAgeDays(project), 0.15) + freshness + (project.description ? 10 : 2)));
 }
@@ -303,9 +331,10 @@ function toast(message) {
 
 function projectCard(project, saved = false) {
   const favorite = favoriteById(project.id);
-  const popularity = project.platform === 'huggingface' ? (project.likes || 0) : (project.stars || 0);
-  const secondary = project.platform === 'huggingface' ? (project.downloads || 0) : (project.forks || 0);
-  const platformLabel = project.platform === 'huggingface' ? 'Hugging Face' : 'GitHub';
+  const meta = platformMeta(project);
+  const popularity = metricValue(project, meta.primaryField);
+  const secondary = metricValue(project, meta.secondaryField);
+  const platformLabel = meta.label;
   const avatar = project.avatar
     ? `<img class="avatar" src="${escapeHtml(project.avatar)}" alt="">`
     : `<div class="avatar text">${escapeHtml(project.name.slice(0, 2).toUpperCase())}</div>`;
@@ -328,7 +357,7 @@ function projectCard(project, saved = false) {
     </div>
     <p class="desc">${escapeHtml(project.description || '暂无描述，需要进一步读取项目文档。')}</p>
     <div class="badges">
-      <span class="badge platform">${platformLabel}</span>
+      <span class="badge platform">${escapeHtml(platformLabel)}</span>
       <span class="badge">${escapeHtml(project.category || classifyCategory(project))}</span>
       ${project.language ? `<span class="badge">${escapeHtml(project.language)}</span>` : ''}
       <span class="badge ${commercialFriendly(project.license) ? 'good' : 'warn'}">${escapeHtml(project.license || '许可证待核查')}</span>
@@ -336,8 +365,8 @@ function projectCard(project, saved = false) {
     <div class="use-types">${useBadges}</div>
     ${savedTags}${savedAction}${savedNote}
     <div class="stats">
-      <div class="stat"><b>${formatNumber(popularity)}</b><span>${project.platform === 'huggingface' ? 'Likes' : 'Stars'}</span></div>
-      <div class="stat"><b>${formatNumber(secondary)}</b><span>${project.platform === 'huggingface' ? 'Downloads' : 'Forks'}</span></div>
+      <div class="stat"><b>${formatNumber(popularity)}</b><span>${escapeHtml(meta.primaryLabel)}</span></div>
+      <div class="stat"><b>${formatNumber(secondary)}</b><span>${escapeHtml(meta.secondaryLabel)}</span></div>
       <div class="stat"><b>${timeAgo(project.createdAt)}</b><span>项目年龄</span></div>
       <div class="score" style="--score:${potentialScore(project)}">${potentialScore(project)}</div>
     </div>
@@ -382,8 +411,8 @@ function filteredProjects() {
   const sorters = {
     today: (a, b) => potentialScore(b) - potentialScore(a),
     week: (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt),
-    month: (a, b) => (b.stars || b.likes || 0) - (a.stars || a.likes || 0),
-    rising: (a, b) => potentialScore(b) / Math.log10((b.stars || b.likes || 0) + 10) - potentialScore(a) / Math.log10((a.stars || a.likes || 0) + 10),
+    month: (a, b) => projectPopularity(b) - projectPopularity(a),
+    rising: (a, b) => potentialScore(b) / Math.log10(projectPopularity(b) + 10) - potentialScore(a) / Math.log10(projectPopularity(a) + 10),
   };
   return projects.sort(sorters[state.period]);
 }
@@ -443,108 +472,84 @@ function openFavoriteDialog(id) {
   els.dialog.showModal();
 }
 
-async function fetchJson(url, options = {}) {
-  const response = await fetch(url, options);
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json();
+function sourceStatusEntry(stateName, count = 0, message = '') {
+  return { state: stateName, count, message };
 }
 
-async function searchGitHubRepositories(query, perPage = 12) {
-  const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(`${query} archived:false`)}&sort=stars&order=desc&per_page=${perPage}`;
-  const data = await fetchJson(url, { headers: { Accept: 'application/vnd.github+json' } });
-  return (data.items || []).map(fromGitHub);
+function readableError(error) {
+  const message = error?.message || String(error || '未知错误');
+  if (/Failed to fetch|NetworkError|Load failed/i.test(message)) return '网络或跨域限制';
+  return message;
 }
 
-async function searchHuggingFaceModels(query, limit = 12) {
-  const url = `https://huggingface.co/api/models?search=${encodeURIComponent(query)}&sort=downloads&direction=-1&limit=${limit}&full=false`;
-  const data = await fetchJson(url);
-  return data.map(fromHuggingFace);
+function renderSourceHealth(target, statuses) {
+  if (!target) return;
+  const visiblePlatforms = Object.keys(statuses || {}).length
+    ? platformIds.filter((platformId) => Object.hasOwn(statuses, platformId))
+    : platformIds;
+  target.innerHTML = visiblePlatforms.map((platformId) => {
+    const meta = platformCatalog[platformId];
+    const status = statuses[platformId] || sourceStatusEntry('idle');
+    const label = status.state === 'live'
+      ? `${status.count}`
+      : status.state === 'empty'
+        ? '0'
+        : status.state === 'error'
+          ? '不可用'
+          : status.state === 'loading'
+            ? '查询中'
+            : '待查询';
+    const title = status.message ? ` title="${escapeHtml(status.message)}"` : '';
+    return `<span class="source-chip ${status.state}"${title}><i></i>${escapeHtml(meta.shortLabel)} ${escapeHtml(label)}</span>`;
+  }).join('');
 }
 
 async function radar(force = false) {
   if (!force) {
     const cached = loadRadarCache();
-    if (cached?.length) {
-      state.projects = dedupeProjects([...cached, ...seed.map(normalizeProject)]);
+    if (cached?.projects?.length) {
+      state.projects = dedupeProjects([...cached.projects, ...seed.map(normalizeProject)]);
+      state.sourceStatus = cached.sourceStatus || {};
       els.status.textContent = '本地缓存 · 点击刷新可重新扫描';
       els.status.className = 'live';
+      renderSourceHealth(els.sourceHealth, state.sourceStatus);
       renderRadar();
       return;
     }
   }
 
-  els.status.textContent = '正在查询免费 API…';
+  els.status.textContent = `正在查询${platformIds.length}个平台的免费公开接口…`;
   els.status.className = '';
   els.projectGrid.innerHTML = '<div class="card skeleton"></div>'.repeat(6);
-  const responses = await Promise.allSettled([githubRadar(), huggingFaceRadar()]);
-  const liveProjects = responses.filter((response) => response.status === 'fulfilled').flatMap((response) => response.value);
+  state.sourceStatus = Object.fromEntries(platformIds.map((platformId) => [platformId, sourceStatusEntry('loading')]));
+  renderSourceHealth(els.sourceHealth, state.sourceStatus);
+
+  const responses = await Promise.allSettled(platformIds.map((platformId) => radarPlatform(platformId)));
+  const liveProjects = [];
+  responses.forEach((response, index) => {
+    const platformId = platformIds[index];
+    if (response.status === 'fulfilled') {
+      const projects = dedupeProjects(response.value || []);
+      liveProjects.push(...projects);
+      state.sourceStatus[platformId] = sourceStatusEntry(projects.length ? 'live' : 'empty', projects.length);
+    } else {
+      state.sourceStatus[platformId] = sourceStatusEntry('error', 0, readableError(response.reason));
+    }
+  });
+
   state.projects = liveProjects.length
     ? dedupeProjects([...liveProjects, ...seed.map(normalizeProject)])
     : seed.map(normalizeProject);
 
-  if (liveProjects.length) saveRadarCache(state.projects);
+  if (liveProjects.length) saveRadarCache(state.projects, state.sourceStatus);
+  const liveCount = Object.values(state.sourceStatus).filter((status) => status.state === 'live').length;
+  const failedCount = Object.values(state.sourceStatus).filter((status) => status.state === 'error').length;
   els.status.textContent = liveProjects.length
-    ? `实时数据 · ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`
-    : 'API暂不可用，显示种子数据';
-  els.status.className = liveProjects.length ? 'live' : 'warn';
+    ? `实时数据 · ${liveCount}/${platformIds.length} 平台${failedCount ? ` · ${failedCount}个降级` : ''}`
+    : '公开接口暂不可用，显示种子数据';
+  els.status.className = liveProjects.length ? (failedCount ? 'warn' : 'live') : 'warn';
+  renderSourceHealth(els.sourceHealth, state.sourceStatus);
   renderRadar();
-}
-
-async function githubRadar() {
-  const date = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
-  const queries = [
-    `created:>${date} stars:>20`,
-    'topic:productivity stars:>200',
-    'topic:personal-finance stars:>100',
-    'topic:home-automation stars:>100',
-  ];
-  const responses = await Promise.allSettled(queries.map((query, index) => searchGitHubRepositories(query, index === 0 ? 18 : 10)));
-  const projects = responses.filter((response) => response.status === 'fulfilled').flatMap((response) => response.value);
-  if (!projects.length) throw new Error('GitHub radar unavailable');
-  return dedupeProjects(projects);
-}
-
-function fromGitHub(repository) {
-  return normalizeProject({
-    id: `github:${repository.full_name}`,
-    platform: 'github',
-    name: repository.name,
-    owner: repository.owner?.login || '',
-    description: repository.description || '',
-    url: repository.html_url,
-    avatar: repository.owner?.avatar_url || '',
-    stars: repository.stargazers_count || 0,
-    forks: repository.forks_count || 0,
-    language: repository.language || '',
-    license: repository.license?.spdx_id || '许可证待核查',
-    updatedAt: repository.pushed_at || repository.updated_at,
-    createdAt: repository.created_at,
-    topics: repository.topics || [],
-  });
-}
-
-async function huggingFaceRadar() {
-  const data = await fetchJson('https://huggingface.co/api/models?sort=trendingScore&direction=-1&limit=18&full=false');
-  return data.map(fromHuggingFace);
-}
-
-function fromHuggingFace(model) {
-  const [owner, ...name] = model.id.split('/');
-  return normalizeProject({
-    id: `huggingface:${model.id}`,
-    platform: 'huggingface',
-    name: name.join('/') || model.id,
-    owner,
-    description: `${model.pipeline_tag ? `任务：${model.pipeline_tag}。` : ''}${(model.tags || []).slice(0, 4).join(' · ')}`,
-    url: `https://huggingface.co/${model.id}`,
-    likes: model.likes || 0,
-    downloads: model.downloads || 0,
-    language: model.library_name || model.pipeline_tag || '',
-    license: (model.tags || []).find((tag) => tag.startsWith('license:'))?.replace('license:', '') || '许可证待核查',
-    updatedAt: model.lastModified || model.last_modified || new Date().toISOString(),
-    createdAt: model.createdAt || model.created_at || model.lastModified,
-    topics: model.tags || [],
-  });
 }
 
 function dedupeProjects(projects) {
@@ -591,36 +596,73 @@ function expandSearchQuery(query) {
 async function searchProjects(query) {
   const plan = expandSearchQuery(query);
   state.lastSearchPlan = plan;
-  const jobs = [];
+  const selectedPlatforms = [...document.querySelectorAll('[data-search-platform]:checked')]
+    .map((input) => input.dataset.searchPlatform)
+    .filter((platformId) => platformCatalog[platformId]);
 
-  if (els.useGitHub.checked) {
-    jobs.push(Promise.allSettled(plan.queries.map((expandedQuery) => searchGitHubRepositories(expandedQuery, 12)))
-      .then((responses) => responses.filter((response) => response.status === 'fulfilled').flatMap((response) => response.value)));
-  }
-  if (els.useHF.checked) {
-    jobs.push(Promise.allSettled(plan.queries.slice(0, 2).map((expandedQuery) => searchHuggingFaceModels(expandedQuery, 12)))
-      .then((responses) => responses.filter((response) => response.status === 'fulfilled').flatMap((response) => response.value)));
-  }
-  if (!jobs.length) {
+  if (!selectedPlatforms.length) {
     toast('请至少选择一个数据源');
     return;
   }
 
-  els.searchSummary.textContent = '正在理解需求并跨平台搜索…';
+  state.searchSourceStatus = Object.fromEntries(selectedPlatforms.map((platformId) => [platformId, sourceStatusEntry('loading')]));
+  els.searchSummary.textContent = `正在理解需求并查询 ${selectedPlatforms.length} 个平台…`;
   els.searchGrid.innerHTML = '<div class="card skeleton"></div>'.repeat(4);
+  els.searchFallbacks.innerHTML = '';
+  renderSourceHealth(els.searchSources, state.searchSourceStatus);
+
+  const jobs = selectedPlatforms.map(async (platformId) => {
+    const meta = platformCatalog[platformId];
+    const queryPool = ['gitee', 'modelscope'].includes(platformId)
+      ? unique([plan.original, ...plan.queries])
+      : plan.queries;
+    const queries = queryPool.slice(0, meta.searchQueries || 1);
+    const responses = await Promise.allSettled(queries.map((expandedQuery) => searchPlatform(platformId, expandedQuery, meta.searchLimit)));
+    const projects = dedupeProjects(responses.filter((response) => response.status === 'fulfilled').flatMap((response) => response.value));
+    const errors = responses.filter((response) => response.status === 'rejected');
+    if (!projects.length && errors.length === responses.length) throw errors[0].reason;
+    return { platformId, projects, partialError: errors[0]?.reason };
+  });
+
   const responses = await Promise.allSettled(jobs);
-  state.results = dedupeProjects(responses.filter((response) => response.status === 'fulfilled').flatMap((response) => response.value));
+  const projects = [];
+  responses.forEach((response, index) => {
+    const platformId = selectedPlatforms[index];
+    if (response.status === 'fulfilled') {
+      projects.push(...response.value.projects);
+      state.searchSourceStatus[platformId] = sourceStatusEntry(
+        response.value.projects.length ? 'live' : 'empty',
+        response.value.projects.length,
+        response.value.partialError ? `部分查询失败：${readableError(response.value.partialError)}` : '',
+      );
+    } else {
+      state.searchSourceStatus[platformId] = sourceStatusEntry('error', 0, readableError(response.reason));
+    }
+  });
+
+  state.results = dedupeProjects(projects);
   sortSearchResults();
 
   const expanded = plan.terms.length ? `已扩展关键词：${plan.terms.slice(0, 10).join(' · ')}。` : '';
-  els.searchSummary.textContent = `“${query}” 找到 ${state.results.length} 个候选。${expanded}许可证需在正式采用前再次核查。`;
+  const failedPlatforms = selectedPlatforms.filter((platformId) => state.searchSourceStatus[platformId]?.state === 'error');
+  const fallbackPlatforms = selectedPlatforms.filter((platformId) => ['error', 'empty'].includes(state.searchSourceStatus[platformId]?.state));
+  els.searchSummary.textContent = `“${query}” 找到 ${state.results.length} 个候选。${expanded}${failedPlatforms.length ? `${failedPlatforms.map((platformId) => platformCatalog[platformId].label).join('、')} 当前已降级。` : ''}许可证需在正式采用前再次核查。`;
+  renderSourceHealth(els.searchSources, state.searchSourceStatus);
+  renderSearchFallbacks(query, fallbackPlatforms);
   renderResults();
+}
+
+function renderSearchFallbacks(query, failedPlatforms) {
+  els.searchFallbacks.innerHTML = failedPlatforms.map((platformId) => {
+    const meta = platformCatalog[platformId];
+    return `<a class="chip fallback" href="${escapeHtml(meta.fallbackUrl(query))}" target="_blank" rel="noopener">直接去 ${escapeHtml(meta.label)} 搜索</a>`;
+  }).join('');
 }
 
 function sortSearchResults() {
   const sorters = {
     score: (a, b) => potentialScore(b) - potentialScore(a),
-    popular: (a, b) => (b.stars || b.likes || 0) - (a.stars || a.likes || 0),
+    popular: (a, b) => projectPopularity(b) - projectPopularity(a),
     fresh: (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt),
   };
   state.results.sort(sorters[els.sort.value]);

@@ -307,6 +307,17 @@ export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = create
 const entryPath = process.argv[1] ? resolve(process.argv[1]) : '';
 if (entryPath && pathToFileURL(entryPath).href === import.meta.url) {
   const server = createOpenRadarServer();
+  server.on('error', (error) => {
+    console.error('');
+    if (error?.code === 'EADDRINUSE') {
+      console.error(`  无法启动：端口 ${DEFAULT_PORT} 已被占用。`);
+      console.error('  请先关闭旧的OpenRadar终端，或在旧终端按 Ctrl + C，再重新运行。');
+    } else {
+      console.error(`  OpenRadar启动失败：${error?.message || error}`);
+    }
+    console.error('');
+    process.exitCode = 1;
+  });
   server.listen(DEFAULT_PORT, '127.0.0.1', () => {
     console.log('');
     console.log('  OpenRadar Phase 0.2-B.1');

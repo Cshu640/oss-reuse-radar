@@ -1,9 +1,9 @@
 {
   "phase": "0.2-B.1",
-  "status": "code_complete_local_mock_verified_user_unverified",
+  "status": "user_verified_gitee_fallback_empty",
   "branch": "phase-0.2-b.1-gitee-fallback",
-  "head": "6a8996d",
-  "working_tree": "dirty_handoff_updates_only",
+  "head": "8798291",
+  "working_tree": "dirty_user_acceptance_handoff_only",
   "completed": [
     "Same-origin Node static server",
     "GET /api/health runtime detection",
@@ -25,11 +25,13 @@
     "Favorites v1 storage compatibility",
     "Node server and parser tests",
     "Updated six-platform Chromium mock test",
-    "Friendly occupied-port error on local server startup"
+    "Friendly occupied-port error on local server startup",
+    "User Windows local compatibility server validation",
+    "User Windows five live platform validation retained",
+    "Real Gitee v5 empty-result diagnosis for project management vue and 若依",
+    "Real Gitee official-search fallback invocation confirmed"
   ],
   "not_completed": [
-    "User Windows validation of Gitee homepage radar through node server.mjs",
-    "User Windows validation of Gitee Chinese inspiration search",
     "Real so.gitee.com HTML parser compatibility",
     "Gitee fallback metadata completeness",
     "Cross-platform repository identity deduplication",
@@ -39,11 +41,13 @@
     "External discussion signals",
     "Cloud favorites sync",
     "Codex MCP server",
-    "Production deployment"
+    "Production deployment",
+    "Gitee repository result delivery after both official paths returned empty",
+    "Bounded Gitee stop-loss degradation to external-search-only mode"
   ],
   "blocked_by": [
-    "Development container cannot resolve or access gitee.com and so.gitee.com",
-    "User Windows Edge Phase 0.2-B.1 acceptance"
+    "Gitee v5 repository search returns empty arrays for broad real queries",
+    "Gitee official search page is dynamic and current HTML parser returns zero repositories"
   ],
   "tests": [
     "node --check app.js: passed",
@@ -71,7 +75,11 @@
     "PORT=8093 actual server startup: passed",
     "GET /api/health on actual server: HTTP 200",
     "GET /index.html on actual server: HTTP 200",
-    "occupied-port second instance: exit code 1 with Chinese guidance"
+    "occupied-port second instance: exit code 1 with Chinese guidance",
+    "user Windows node server.mjs startup: passed",
+    "user Windows GET /api/gitee/search?q=project%20management: projects empty, official-search fallback confirmed",
+    "user Windows GET /api/gitee/search?q=vue: projects empty, official-search fallback confirmed",
+    "user Windows GET /api/gitee/search?q=若依: projects empty, official-search fallback confirmed"
   ],
-  "next_task": "Run Phase 0.2-B.1 on the user Windows machine with node server.mjs, verify the local compatibility status and real Gitee homepage/search results, then fix only real Gitee response parsing or field compatibility defects."
+  "next_task": "Phase 0.2-B.2: apply one bounded Gitee repair attempt with diagnostics and explicit external-search-only stop-loss, then start Phase 0.3-A local historical snapshot foundation for the five live platforms."
 }

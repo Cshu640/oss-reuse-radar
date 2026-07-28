@@ -121,3 +121,31 @@
 - 测试：实际使用8093启动成功，健康接口与首页均HTTP 200；8094双实例冲突测试返回退出码1并显示中文提示。
 - 下一项唯一任务：用户Windows使用新版启动器验证Gitee真实首页和搜索。
 - 关键文件：`server.mjs`、`start-openradar.cmd`、交接文件。
+
+## 2026-07-28 — Phase 0.2-B.1 final packaged status
+- 当前阶段：Phase 0.2-B.1
+- 分支：`phase-0.2-b.1-gitee-fallback`
+- HEAD：`8798291`（核心功能提交 `2a99832`，端口提示提交 `6a8996d`，最新交接提交 `8798291`）
+- 工作区：dirty，仅最终状态指针三份交接文件；staged none。
+- 标签/推送/合并：tags none；not pushed；merge none。
+- 已完成：代码、测试、Windows启动器、源码包与Git bundle准备完成。
+- 未完成：用户Windows真实Gitee验收。
+- 当前阻塞：开发容器无法访问Gitee真实上游。
+- 禁止事项：不得把打包完成说成Gitee验收通过。
+- 已知问题和风险：Gitee官方网页结构变化仍可能导致回退解析失败。
+- 下一项唯一任务：用户在Windows双击 `start-openradar.cmd`，验证Gitee状态与中文搜索。
+
+## 2026-07-28 — Phase 0.2-B.1 user validation: official paths both empty
+- 当前阶段：Phase 0.2-B.1 — Gitee Browser Compatibility Fallback
+- 分支：`phase-0.2-b.1-gitee-fallback`
+- HEAD：`8798291`（本记录提交前）
+- 状态：用户Windows真实验收完成；本地兼容服务与回退切换正常，但Gitee仓库结果未通过。
+- 已完成：`node server.mjs`真实启动；五个平台继续返回；Gitee同源路由可访问；v5空结果与official-search回退均真实确认。
+- 未完成：Gitee真实项目结果；稳定动态数据接口；正式止损呈现；历史快照。
+- 当前阻塞：`project management`、`vue`、`若依`均由v5返回空数组，动态搜索回退也解析为零项目。
+- 禁止事项：不得继续重复相同人工测试；不得无限追逐不稳定内部接口；不得让Gitee阻塞历史快照；不得称Gitee已修复。
+- 已知问题和风险：Gitee只能暂按外部搜索入口降级；内部动态接口变化风险高。
+- 工作区/暂存/提交/标签/推送/合并：working tree dirty（本验收交接）；staged none；HEAD `8798291`；tags none；not pushed；merge none。
+- 测试：Windows `/api/gitee/search` 对 `project management`、`vue`、`若依`均返回 `projects: []` 与 `source: gitee-official-search`。
+- 下一项唯一任务：一次有止损线的Gitee精准修复，失败即外部搜索降级，然后进入五平台本地历史快照。
+- 关键文件：`server.mjs`、`platform-adapters.js`、`app.js`、交接文件。

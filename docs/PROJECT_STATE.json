@@ -2,7 +2,7 @@
   "phase": "0.2-B.1",
   "status": "code_complete_local_mock_verified_user_unverified",
   "branch": "phase-0.2-b.1-gitee-fallback",
-  "head": "2a99832",
+  "head": "6a8996d",
   "working_tree": "dirty_handoff_updates_only",
   "completed": [
     "Same-origin Node static server",
@@ -24,7 +24,8 @@
     "Service worker v4 with API bypass",
     "Favorites v1 storage compatibility",
     "Node server and parser tests",
-    "Updated six-platform Chromium mock test"
+    "Updated six-platform Chromium mock test",
+    "Friendly occupied-port error on local server startup"
   ],
   "not_completed": [
     "User Windows validation of Gitee homepage radar through node server.mjs",
@@ -66,7 +67,11 @@
     "manifest JSON parse: passed",
     "git diff --check: passed",
     "real Gitee upstream in development container: not run",
-    "user Windows Edge Phase 0.2-B.1: not run"
+    "user Windows Edge Phase 0.2-B.1: not run",
+    "PORT=8093 actual server startup: passed",
+    "GET /api/health on actual server: HTTP 200",
+    "GET /index.html on actual server: HTTP 200",
+    "occupied-port second instance: exit code 1 with Chinese guidance"
   ],
   "next_task": "Run Phase 0.2-B.1 on the user Windows machine with node server.mjs, verify the local compatibility status and real Gitee homepage/search results, then fix only real Gitee response parsing or field compatibility defects."
 }

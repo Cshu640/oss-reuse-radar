@@ -5,7 +5,7 @@ Phase 0.2-B.1 — Gitee Browser Compatibility Fallback
 
 ## 分支和 HEAD
 - Branch：`phase-0.2-b.1-gitee-fallback`
-- Functional HEAD：`2a99832`
+- Functional HEAD：`6a8996d`
 - 当前 HEAD：交接提交后需再次同步
 
 ## 当前状态
@@ -25,6 +25,7 @@ Phase 0.2-B.1 功能代码已完成。针对用户 Windows Edge 中 Gitee 显示
 - Gitee通过官方搜索回退时，状态标签显示“搜索回退”并保留原因提示
 - 页面左下角自动识别“本地兼容服务”或“静态模式”
 - 新增Windows双击启动器 `start-openradar.cmd`
+- 端口被旧服务器占用时，终端显示明确中文提示并以失败码退出，不再打印难懂堆栈
 - ModelScope已通过上一阶段用户真实验收，移除“实验”标识
 - Gitee继续保留“实验”标识，等待本阶段真实验收
 - 雷达缓存升级为 `openradar:radar-cache:v4`
@@ -96,6 +97,8 @@ Phase 0.2-B.1 功能代码已完成。针对用户 Windows Edge 中 Gitee 显示
   - 390×844移动端无横向溢出
   - 收藏键兼容
 - Manifest JSON解析：通过
+- `PORT=8093 node server.mjs` 实际启动：通过；`/api/health` 200、`index.html` 200
+- 端口占用测试：通过；第二实例返回退出码1并显示中文处理提示
 - `git diff --check`：通过
 - 真实Gitee网络：开发容器未运行
 - 用户Windows Edge Phase 0.2-B.1：未验收
@@ -103,7 +106,7 @@ Phase 0.2-B.1 功能代码已完成。针对用户 Windows Edge 中 Gitee 显示
 ## Git 状态
 - Working tree：功能提交后clean；写入本交接后dirty
 - Staged：none
-- Functional commit：`2a99832 fix: add local gitee compatibility channel`
+- Functional commits：`2a99832 fix: add local gitee compatibility channel`；`6a8996d fix: explain occupied local port`
 - Tags：none
 - Push：not pushed；origin仍指向本地Phase 0.1 bundle
 - Merge：none

@@ -98,3 +98,26 @@
 - 测试：四个JS/MJS语法检查；Node服务与解析测试；v5成功/空结果回退/缓存；API健康与静态HTTP；六平台桌面模拟；390px移动端；Gitee回退标签；中文搜索；收藏键；Manifest；diff均通过。真实Gitee未执行。
 - 下一项唯一任务：用户使用 `node server.mjs` 或 `start-openradar.cmd` 运行新版，验证Gitee首页和中文搜索；只修复真实兼容问题。
 - 关键文件：`server.mjs`、`start-openradar.cmd`、`platform-adapters.js`、`app.js`、`sw.js`、`tests/server_test.mjs`、`tests/browser_mock_test.py`、交接文件。
+
+## 2026-07-28 — Phase 0.2-B.1 final status pointer
+- 当前阶段：Phase 0.2-B.1
+- 分支：`phase-0.2-b.1-gitee-fallback`
+- HEAD：`5df0026`（功能提交 `2a99832`，交接提交 `5df0026`）
+- 工作区：dirty，仅本条最终状态指针、`HANDOFF.md` 与 `docs/PROJECT_STATE.json` 同步更新；staged none。
+- 标签/推送/合并：tags none；not pushed；merge none。
+- 状态：代码与正式交接均已提交；真实Gitee上游与用户Windows验收仍未完成。
+- 下一项唯一任务：用户使用 `node server.mjs` 或双击 `start-openradar.cmd` 验证Gitee首页和中文搜索。
+
+## 2026-07-28 — Phase 0.2-B.1 occupied-port usability fix
+- 当前阶段：Phase 0.2-B.1
+- 分支：`phase-0.2-b.1-gitee-fallback`
+- Functional HEAD：`6a8996d`
+- 已完成：本地服务端口被占用时显示中文说明，提醒关闭旧OpenRadar终端或按 `Ctrl + C`，并以退出码1结束。
+- 未完成：用户Windows真实Gitee验收及后续历史快照。
+- 当前阻塞：真实Gitee上游仍只能由用户Windows验证。
+- 禁止事项：不得因端口冲突自动终止未知进程；不得静默改用其他端口导致桌面PWA来源改变。
+- 已知问题和风险：用户若保留旧服务器，仍需手工停止后再启动新版。
+- 工作区/暂存/提交/标签/推送/合并：代码提交 `6a8996d`；写交接后dirty；staged none；tags none；not pushed；merge none。
+- 测试：实际使用8093启动成功，健康接口与首页均HTTP 200；8094双实例冲突测试返回退出码1并显示中文提示。
+- 下一项唯一任务：用户Windows使用新版启动器验证Gitee真实首页和搜索。
+- 关键文件：`server.mjs`、`start-openradar.cmd`、交接文件。

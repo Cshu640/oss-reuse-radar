@@ -54,7 +54,7 @@ export const platformCatalog = {
     secondaryLabel: 'Forks',
     searchQueries: 1,
     searchLimit: 12,
-    experimental: true,
+    limited: true,
     fallbackUrl: (query) => `https://so.gitee.com/?q=${encodeURIComponent(query)}&type=repository&sort=watches_count`,
   },
   modelscope: {
@@ -259,8 +259,16 @@ async function searchCodeberg(query, limit) {
   return mapProjects(data.data || data, fromCodeberg);
 }
 
-async function searchGitee(query, limit) {
-  const proxyUrl = `/api/gitee/search?q=${encodeURIComponent(query)}&limit=${limit}`;
+
+function platformDegraded(message, badge = '外部搜索') {
+  const error = new Error(message);
+  error.degraded = true;
+  error.badge = badge;
+  return error;
+}
+
+async function searchGitee(query, limit, mode = 'search') {
+  const proxyUrl = `/api/gitee/search?q=${encodeURIComponent(query)}&limit=${limit}${mode === 'radar' ? '&mode=radar' : ''}`;
   let proxyError;
   try {
     const data = await fetchJson(proxyUrl, { headers: { Accept: 'application/json' } });
@@ -269,7 +277,9 @@ async function searchGitee(query, limit) {
       sourceMode: data?.source || 'local-proxy',
       sourceWarning: data?.warning || '',
     }));
-    if (projects.length || Array.isArray(data?.projects)) return projects;
+    if (projects.length) return projects;
+    if (data?.degraded) throw platformDegraded(data.warning || 'Gitee已降级为外部搜索入口');
+    if (Array.isArray(data?.projects)) return projects;
   } catch (error) {
     proxyError = error;
   }
@@ -336,14 +346,7 @@ export async function radarPlatform(platformId) {
   }
 
   if (platformId === 'gitee') {
-    const results = await Promise.allSettled([
-      searchGitee('AI', 8),
-      searchGitee('开源工具', 8),
-      searchGitee('办公', 6),
-    ]);
-    const projects = results.filter((result) => result.status === 'fulfilled').flatMap((result) => result.value);
-    if (!projects.length) throw new Error('Gitee public search unavailable');
-    return projects;
+    return searchGitee('开源', 18, 'radar');
   }
 
   if (platformId === 'modelscope') {

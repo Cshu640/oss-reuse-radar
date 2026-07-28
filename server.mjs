@@ -195,21 +195,24 @@ export function createGiteeSearchService({ fetchImpl = fetch, now = () => Date.n
     'User-Agent': 'OpenRadar/0.2-B.1 (+local personal open-source radar)',
   };
 
-  return async function searchGitee(query, limit = 20) {
+  return async function searchGitee(query, limit = 20, options = {}) {
     const safeQuery = String(query || '').trim().slice(0, 200);
     const safeLimit = Math.min(30, Math.max(1, Number(limit) || 20));
+    const allowExplore = Boolean(options.allowExplore);
     if (!safeQuery) throw new Error('缺少Gitee搜索关键词');
     const cacheKey = `${safeQuery}\u0000${safeLimit}`;
     const cached = cache.get(cacheKey);
     if (cached && now() - cached.savedAt < CACHE_TTL) return { ...cached.value, cached: true };
 
     const warnings = [];
+    const diagnostics = { v5: 'not-run', officialSearch: 'not-run', explore: 'not-run' };
     const apiUrl = `https://gitee.com/api/v5/search/repositories?q=${encodeURIComponent(safeQuery)}&sort=stars_count&order=desc&per_page=${safeLimit}`;
     try {
       const response = await fetchWithTimeout(fetchImpl, apiUrl, { headers });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       const projects = Array.isArray(data) ? data.map(repositoryFromObject).filter(Boolean) : [];
+      diagnostics.v5 = `http-${response.status}:count-${projects.length}`;
       if (projects.length) {
         const value = { projects: projects.slice(0, safeLimit), source: 'gitee-v5-api', warning: '' };
         cache.set(cacheKey, { savedAt: now(), value });
@@ -217,6 +220,7 @@ export function createGiteeSearchService({ fetchImpl = fetch, now = () => Date.n
       }
       warnings.push('Gitee v5 API返回空结果');
     } catch (error) {
+      diagnostics.v5 = `error:${error?.message || error}`;
       warnings.push(`Gitee v5 API失败：${error?.message || error}`);
     }
 
@@ -225,17 +229,57 @@ export function createGiteeSearchService({ fetchImpl = fetch, now = () => Date.n
       const response = await fetchWithTimeout(fetchImpl, webUrl, { headers: { ...headers, Accept: 'text/html' } });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const projects = parseGiteeSearchHtml(await response.text(), safeLimit);
-      const value = {
-        projects,
-        source: 'gitee-official-search',
-        warning: warnings.join('；'),
-      };
-      cache.set(cacheKey, { savedAt: now(), value });
-      return value;
+      diagnostics.officialSearch = `http-${response.status}:count-${projects.length}`;
+      if (projects.length) {
+        const value = {
+          projects,
+          source: 'gitee-official-search',
+          warning: warnings.join('；'),
+          diagnostics,
+        };
+        cache.set(cacheKey, { savedAt: now(), value });
+        return value;
+      }
+      warnings.push('Gitee官方搜索动态页未返回可解析仓库');
     } catch (error) {
+      diagnostics.officialSearch = `error:${error?.message || error}`;
       warnings.push(`Gitee官方搜索回退失败：${error?.message || error}`);
-      throw new Error(warnings.join('；'));
     }
+
+    if (allowExplore) {
+      const exploreUrl = 'https://gitee.com/explore/all?sort=starred';
+      try {
+        const response = await fetchWithTimeout(fetchImpl, exploreUrl, { headers: { ...headers, Accept: 'text/html' } });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const projects = parseGiteeSearchHtml(await response.text(), safeLimit);
+        diagnostics.explore = `http-${response.status}:count-${projects.length}`;
+        if (projects.length) {
+          const value = {
+            projects,
+            source: 'gitee-explore',
+            warning: [...warnings, '关键词搜索不可用，首页改用Gitee公开探索页'].join('；'),
+            diagnostics,
+          };
+          cache.set(cacheKey, { savedAt: now(), value });
+          return value;
+        }
+        warnings.push('Gitee公开探索页未返回可解析仓库');
+      } catch (error) {
+        diagnostics.explore = `error:${error?.message || error}`;
+        warnings.push(`Gitee公开探索页失败：${error?.message || error}`);
+      }
+    }
+
+    const value = {
+      projects: [],
+      source: 'gitee-external-search',
+      warning: [...warnings, '已触发止损：Gitee降级为外部搜索入口，不参与实时榜单与增长统计'].join('；'),
+      degraded: true,
+      externalUrl: webUrl,
+      diagnostics,
+    };
+    cache.set(cacheKey, { savedAt: now(), value });
+    return value;
   };
 }
 
@@ -280,14 +324,17 @@ export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = create
     try {
       const requestUrl = new URL(req.url || '/', 'http://localhost');
       if (req.method === 'GET' && requestUrl.pathname === '/api/health') {
-        json(res, 200, { status: 'ok', version: '0.2-B.1', giteeProxy: true });
+        json(res, 200, { status: 'ok', version: '0.2-B.2', giteeProxy: true, giteeMode: 'bounded-fallback' });
         return;
       }
       if (req.method === 'GET' && requestUrl.pathname === '/api/gitee/search') {
         const query = requestUrl.searchParams.get('q') || '';
         const limit = requestUrl.searchParams.get('limit') || 20;
+        const allowExplore = requestUrl.searchParams.get('mode') === 'radar';
         try {
-          json(res, 200, await giteeSearch(query, limit));
+          const result = await giteeSearch(query, limit, { allowExplore });
+          console.log(`[Gitee] q=${JSON.stringify(query)} source=${result.source} count=${result.projects?.length || 0} ${JSON.stringify(result.diagnostics || {})}`);
+          json(res, 200, result);
         } catch (error) {
           json(res, 502, { error: error?.message || 'Gitee compatibility channel failed' });
         }
@@ -320,9 +367,9 @@ if (entryPath && pathToFileURL(entryPath).href === import.meta.url) {
   });
   server.listen(DEFAULT_PORT, '127.0.0.1', () => {
     console.log('');
-    console.log('  OpenRadar Phase 0.2-B.1');
+    console.log('  OpenRadar Phase 0.2-B.2');
     console.log(`  Local: http://localhost:${DEFAULT_PORT}`);
-    console.log('  Gitee: 同源兼容通道已启用（官方API优先，官方搜索回退）');
+    console.log('  Gitee: 有止损兼容通道（v5 → 官方搜索 → 首页探索 → 外部搜索）');
     console.log('  按 Ctrl + C 停止服务器。');
     console.log('');
   });

@@ -1,7 +1,7 @@
 import { platformCatalog, platformIds, radarPlatform, searchPlatform } from './platform-adapters.js';
 
 const FAVORITES_KEY = 'openradar:favorites:v1';
-const RADAR_CACHE_KEY = 'openradar:radar-cache:v4';
+const RADAR_CACHE_KEY = 'openradar:radar-cache:v5';
 const RADAR_CACHE_TTL = 15 * 60 * 1000;
 
 const categories = [
@@ -540,6 +540,8 @@ async function radar(force = false) {
         warning,
         fallback ? '搜索回退' : '',
       );
+    } else if (response.reason?.degraded) {
+      state.sourceStatus[platformId] = sourceStatusEntry('empty', 0, readableError(response.reason), response.reason.badge || '外部搜索');
     } else {
       state.sourceStatus[platformId] = sourceStatusEntry('error', 0, readableError(response.reason));
     }
@@ -552,8 +554,9 @@ async function radar(force = false) {
   if (liveProjects.length) saveRadarCache(state.projects, state.sourceStatus);
   const liveCount = Object.values(state.sourceStatus).filter((status) => status.state === 'live').length;
   const failedCount = Object.values(state.sourceStatus).filter((status) => status.state === 'error').length;
+  const searchOnlyCount = Object.values(state.sourceStatus).filter((status) => status.badge === '外部搜索').length;
   els.status.textContent = liveProjects.length
-    ? `实时数据 · ${liveCount}/${platformIds.length} 平台${failedCount ? ` · ${failedCount}个降级` : ''}`
+    ? `实时数据 · ${liveCount}/${platformIds.length} 平台${searchOnlyCount ? ` · ${searchOnlyCount}个搜索入口` : ''}${failedCount ? ` · ${failedCount}个故障` : ''}`
     : '公开接口暂不可用，显示种子数据';
   els.status.className = liveProjects.length ? (failedCount ? 'warn' : 'live') : 'warn';
   renderSourceHealth(els.sourceHealth, state.sourceStatus);
@@ -654,6 +657,8 @@ async function searchProjects(query) {
         messages,
         response.value.fallback ? '搜索回退' : '',
       );
+    } else if (response.reason?.degraded) {
+      state.searchSourceStatus[platformId] = sourceStatusEntry('empty', 0, readableError(response.reason), response.reason.badge || '外部搜索');
     } else {
       state.searchSourceStatus[platformId] = sourceStatusEntry('error', 0, readableError(response.reason));
     }
@@ -664,8 +669,9 @@ async function searchProjects(query) {
 
   const expanded = plan.terms.length ? `已扩展关键词：${plan.terms.slice(0, 10).join(' · ')}。` : '';
   const failedPlatforms = selectedPlatforms.filter((platformId) => state.searchSourceStatus[platformId]?.state === 'error');
+  const searchOnlyPlatforms = selectedPlatforms.filter((platformId) => state.searchSourceStatus[platformId]?.badge === '外部搜索');
   const fallbackPlatforms = selectedPlatforms.filter((platformId) => ['error', 'empty'].includes(state.searchSourceStatus[platformId]?.state));
-  els.searchSummary.textContent = `“${query}” 找到 ${state.results.length} 个候选。${expanded}${failedPlatforms.length ? `${failedPlatforms.map((platformId) => platformCatalog[platformId].label).join('、')} 当前已降级。` : ''}许可证需在正式采用前再次核查。`;
+  els.searchSummary.textContent = `“${query}” 找到 ${state.results.length} 个候选。${expanded}${searchOnlyPlatforms.length ? `${searchOnlyPlatforms.map((platformId) => platformCatalog[platformId].label).join('、')} 仅提供外部搜索入口。` : ''}${failedPlatforms.length ? `${failedPlatforms.map((platformId) => platformCatalog[platformId].label).join('、')} 当前故障。` : ''}许可证需在正式采用前再次核查。`;
   renderSourceHealth(els.searchSources, state.searchSourceStatus);
   renderSearchFallbacks(query, fallbackPlatforms);
   renderResults();
@@ -704,7 +710,7 @@ async function detectRuntimeMode() {
     if (!health.giteeProxy) throw new Error('兼容通道未启用');
     els.runtimeMode.textContent = '● 本地兼容服务';
     els.runtimeMode.className = 'runtime-live';
-    els.runtimeDetail.textContent = '六平台 · Gitee官方API与搜索回退';
+    els.runtimeDetail.textContent = '五平台实时 · Gitee有止损兼容通道';
   } catch {
     els.runtimeMode.textContent = '● 静态模式';
     els.runtimeMode.className = 'runtime-warn';

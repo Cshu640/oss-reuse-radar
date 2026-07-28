@@ -41,6 +41,33 @@ const cached = await fallbackService('权限认证', 10);
 assert.equal(cached.cached, true);
 assert.equal(fallbackCalls, 2);
 
+
+const exploreService = createGiteeSearchService({
+  fetchImpl: async (url) => {
+    if (String(url).includes('/api/v5/search/repositories')) {
+      return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (String(url).includes('so.gitee.com')) {
+      return new Response('<html><body><div id="app"></div></body></html>', { status: 200, headers: { 'Content-Type': 'text/html' } });
+    }
+    return new Response(fixture, { status: 200, headers: { 'Content-Type': 'text/html' } });
+  },
+});
+const explore = await exploreService('开源', 10, { allowExplore: true });
+assert.equal(explore.source, 'gitee-explore');
+assert.equal(explore.projects.length, 2);
+assert.match(explore.warning, /探索页/);
+
+const stopLossService = createGiteeSearchService({
+  fetchImpl: async () => new Response('<html><body><div id="app"></div></body></html>', { status: 200, headers: { 'Content-Type': 'text/html' } }),
+});
+const stopLoss = await stopLossService('vue', 10, { allowExplore: true });
+assert.equal(stopLoss.source, 'gitee-external-search');
+assert.equal(stopLoss.degraded, true);
+assert.equal(stopLoss.projects.length, 0);
+assert.match(stopLoss.warning, /已触发止损/);
+assert.match(stopLoss.externalUrl, /so\.gitee\.com/);
+
 const apiService = createGiteeSearchService({
   fetchImpl: async () => new Response(JSON.stringify([{
     full_name: 'demo/radar',
@@ -79,4 +106,4 @@ assert.match(index.headers.get('content-type'), /text\/html/);
 server.close();
 await once(server, 'close');
 
-console.log(JSON.stringify({ parsed: parsed.length, fallbackSource: fallback.source, health, proxied: proxied.projects.length }, null, 2));
+console.log(JSON.stringify({ parsed: parsed.length, fallbackSource: fallback.source, exploreSource: explore.source, stopLossSource: stopLoss.source, health, proxied: proxied.projects.length }, null, 2));

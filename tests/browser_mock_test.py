@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mocked browser smoke test for OpenRadar Phase 0.2-B.
+"""Mocked browser smoke test for OpenRadar Phase 0.2-B.1.
 
 This test never contacts external services. It exercises the six adapter schemas,
 Chinese query expansion, platform status rendering, responsive layout, and the
@@ -14,7 +14,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
-SCREENSHOT = Path('/mnt/data/open-source-radar-phase-0.2-b-browser.png')
+SCREENSHOT = Path('/mnt/data/open-source-radar-phase-0.2-b.1-browser.png')
 
 
 def build_html() -> str:
@@ -72,7 +72,8 @@ window.fetch = (input) => {
   if (url.includes('huggingface.co/api/models')) return jsonResponse([{ id: 'demo/hf-model', likes: 31, downloads: 900, pipeline_tag: 'text-generation', library_name: 'transformers', tags: ['license:apache-2.0', 'npc', 'memory'], lastModified: '2026-07-28T00:00:00Z', createdAt: '2026-07-02T00:00:00Z' }]);
   if (url.includes('gitlab.com/api/v4/projects')) return jsonResponse([repo('gitlab', 1)]);
   if (url.includes('codeberg.org/api/v1/repos/search')) return jsonResponse({ ok: true, data: [repo('codeberg', 1)] });
-  if (url.includes('gitee.com/api/v5/search/repositories')) return jsonResponse([repo('gitee', 1)]);
+  if (url.includes('/api/health')) return jsonResponse({ status: 'ok', version: '0.2-B.1', giteeProxy: true });
+  if (url.includes('/api/gitee/search')) return jsonResponse({ projects: [repo('gitee', 1)], source: 'gitee-official-search', warning: 'mock fallback' });
   if (url.includes('modelscope.cn/openapi/v1/models')) return jsonResponse({ success: true, data: { models: [{ id: 'demo/ms-model', likes: 22, downloads: 1200, license: 'Apache License 2.0', tasks: ['text-generation', 'npc-memory'], library: 'PyTorch', last_modified: '2026-07-28T00:00:00Z', created_at: '2026-07-03T00:00:00Z' }] } });
   return Promise.reject(new Error(`Unmocked URL: ${url}`));
 };
@@ -129,7 +130,7 @@ def assert_result(result: dict, mobile: bool = False) -> None:
     if mobile:
         assert result['sidebarOpen'], result
 
-    gitee_urls = [url for url in result['requestedUrls'] if 'gitee.com/api/v5/search/repositories' in url]
+    gitee_urls = [url for url in result['requestedUrls'] if '/api/gitee/search' in url]
     modelscope_urls = [url for url in result['requestedUrls'] if 'modelscope.cn/openapi/v1/models' in url]
     assert any('%E9%80%82%E5%90%88%E7%BD%91%E9%A1%B5%E6%B8%B8%E6%88%8F' in url for url in gitee_urls), gitee_urls
     assert any('%E9%80%82%E5%90%88%E7%BD%91%E9%A1%B5%E6%B8%B8%E6%88%8F' in url for url in modelscope_urls), modelscope_urls

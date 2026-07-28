@@ -1,7 +1,7 @@
 import { platformCatalog, platformIds, radarPlatform, searchPlatform } from './platform-adapters.js';
 
 const FAVORITES_KEY = 'openradar:favorites:v1';
-const RADAR_CACHE_KEY = 'openradar:radar-cache:v3';
+const RADAR_CACHE_KEY = 'openradar:radar-cache:v4';
 const RADAR_CACHE_TTL = 15 * 60 * 1000;
 
 const categories = [
@@ -472,8 +472,8 @@ function openFavoriteDialog(id) {
   els.dialog.showModal();
 }
 
-function sourceStatusEntry(stateName, count = 0, message = '') {
-  return { state: stateName, count, message };
+function sourceStatusEntry(stateName, count = 0, message = '', badge = '') {
+  return { state: stateName, count, message, badge };
 }
 
 function readableError(error) {
@@ -500,7 +500,8 @@ function renderSourceHealth(target, statuses) {
             ? '查询中'
             : '待查询';
     const title = status.message ? ` title="${escapeHtml(status.message)}"` : '';
-    return `<span class="source-chip ${status.state}"${title}><i></i>${escapeHtml(meta.shortLabel)} ${escapeHtml(label)}</span>`;
+    const badge = status.badge ? `<small>${escapeHtml(status.badge)}</small>` : '';
+    return `<span class="source-chip ${status.state}"${title}><i></i>${escapeHtml(meta.shortLabel)} ${escapeHtml(label)}${badge}</span>`;
   }).join('');
 }
 
@@ -531,7 +532,14 @@ async function radar(force = false) {
     if (response.status === 'fulfilled') {
       const projects = dedupeProjects(response.value || []);
       liveProjects.push(...projects);
-      state.sourceStatus[platformId] = sourceStatusEntry(projects.length ? 'live' : 'empty', projects.length);
+      const fallback = projects.some((project) => project.sourceMode === 'gitee-official-search');
+      const warning = unique(projects.map((project) => project.sourceWarning)).join('；');
+      state.sourceStatus[platformId] = sourceStatusEntry(
+        projects.length ? 'live' : 'empty',
+        projects.length,
+        warning,
+        fallback ? '搜索回退' : '',
+      );
     } else {
       state.sourceStatus[platformId] = sourceStatusEntry('error', 0, readableError(response.reason));
     }
@@ -621,7 +629,13 @@ async function searchProjects(query) {
     const projects = dedupeProjects(responses.filter((response) => response.status === 'fulfilled').flatMap((response) => response.value));
     const errors = responses.filter((response) => response.status === 'rejected');
     if (!projects.length && errors.length === responses.length) throw errors[0].reason;
-    return { platformId, projects, partialError: errors[0]?.reason };
+    return {
+      platformId,
+      projects,
+      partialError: errors[0]?.reason,
+      fallback: projects.some((project) => project.sourceMode === 'gitee-official-search'),
+      sourceWarning: unique(projects.map((project) => project.sourceWarning)).join('；'),
+    };
   });
 
   const responses = await Promise.allSettled(jobs);
@@ -630,10 +644,15 @@ async function searchProjects(query) {
     const platformId = selectedPlatforms[index];
     if (response.status === 'fulfilled') {
       projects.push(...response.value.projects);
+      const messages = [
+        response.value.partialError ? `部分查询失败：${readableError(response.value.partialError)}` : '',
+        response.value.sourceWarning,
+      ].filter(Boolean).join('；');
       state.searchSourceStatus[platformId] = sourceStatusEntry(
         response.value.projects.length ? 'live' : 'empty',
         response.value.projects.length,
-        response.value.partialError ? `部分查询失败：${readableError(response.value.partialError)}` : '',
+        messages,
+        response.value.fallback ? '搜索回退' : '',
       );
     } else {
       state.searchSourceStatus[platformId] = sourceStatusEntry('error', 0, readableError(response.reason));
@@ -675,7 +694,26 @@ function renderResults() {
   bindProjectActions(els.searchGrid);
 }
 
+
+async function detectRuntimeMode() {
+  if (!els.runtimeMode || !els.runtimeDetail) return;
+  try {
+    const response = await fetch('/api/health', { cache: 'no-store' });
+    if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) throw new Error('静态服务器');
+    const health = await response.json();
+    if (!health.giteeProxy) throw new Error('兼容通道未启用');
+    els.runtimeMode.textContent = '● 本地兼容服务';
+    els.runtimeMode.className = 'runtime-live';
+    els.runtimeDetail.textContent = '六平台 · Gitee官方API与搜索回退';
+  } catch {
+    els.runtimeMode.textContent = '● 静态模式';
+    els.runtimeMode.className = 'runtime-warn';
+    els.runtimeDetail.textContent = '五平台可用 · Gitee请改用 node server.mjs';
+  }
+}
+
 function init() {
+  detectRuntimeMode();
   renderCategories();
   els.suggestions.innerHTML = suggestions.map((query) => `<button class="chip" data-query="${escapeHtml(query)}">${escapeHtml(query)}</button>`).join('');
 

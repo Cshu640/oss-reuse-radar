@@ -55,7 +55,7 @@ export const platformCatalog = {
     searchQueries: 1,
     searchLimit: 12,
     experimental: true,
-    fallbackUrl: (query) => `https://gitee.com/search?type=repository&q=${encodeURIComponent(query)}`,
+    fallbackUrl: (query) => `https://so.gitee.com/?q=${encodeURIComponent(query)}&type=repository&sort=watches_count`,
   },
   modelscope: {
     label: 'ModelScope',
@@ -66,7 +66,6 @@ export const platformCatalog = {
     secondaryLabel: 'Downloads',
     searchQueries: 2,
     searchLimit: 12,
-    experimental: true,
     fallbackUrl: (query) => `https://modelscope.cn/models?name=${encodeURIComponent(query)}`,
   },
 };
@@ -261,9 +260,27 @@ async function searchCodeberg(query, limit) {
 }
 
 async function searchGitee(query, limit) {
-  const url = `https://gitee.com/api/v5/search/repositories?q=${encodeURIComponent(query)}&sort=stars_count&order=desc&per_page=${limit}`;
-  const data = await fetchJson(url);
-  return mapProjects(data, fromGitee);
+  const proxyUrl = `/api/gitee/search?q=${encodeURIComponent(query)}&limit=${limit}`;
+  let proxyError;
+  try {
+    const data = await fetchJson(proxyUrl, { headers: { Accept: 'application/json' } });
+    const projects = mapProjects(data?.projects, fromGitee).map((project) => ({
+      ...project,
+      sourceMode: data?.source || 'local-proxy',
+      sourceWarning: data?.warning || '',
+    }));
+    if (projects.length || Array.isArray(data?.projects)) return projects;
+  } catch (error) {
+    proxyError = error;
+  }
+
+  try {
+    const directUrl = `https://gitee.com/api/v5/search/repositories?q=${encodeURIComponent(query)}&sort=stars_count&order=desc&per_page=${limit}`;
+    const data = await fetchJson(directUrl, { headers: { Accept: 'application/json' } });
+    return mapProjects(data, fromGitee);
+  } catch (directError) {
+    throw new Error(`Gitee兼容通道不可用：${proxyError?.message || '本地代理未启动'}；浏览器直连：${directError?.message || directError}。请使用 node server.mjs 启动OpenRadar`);
+  }
 }
 
 async function searchModelScope(query, limit) {

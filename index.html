@@ -22,7 +22,7 @@
       </nav>
       <p class="side-title">兴趣分类</p>
       <div id="categories"></div>
-      <footer><span>● 免费 API 模式</span><small>GitHub · Hugging Face · GitLab · Codeberg · Gitee · ModelScope</small></footer>
+      <footer><span id="runtimeMode">● 检测运行模式</span><small id="runtimeDetail">GitHub · Hugging Face · GitLab · Codeberg · Gitee · ModelScope</small></footer>
     </aside>
 
     <main>
@@ -52,10 +52,10 @@
       </section>
 
       <section id="searchView" class="view">
-        <div class="page-title"><em>INSPIRATION SEARCH</em><h1>有灵感，马上跨平台搜索</h1><p>输入中文自然语言需求，自动扩展为英文技术关键词，再并行搜索六个开源平台。</p></div>
+        <div class="page-title"><em>INSPIRATION SEARCH</em><h1>有灵感，马上跨平台搜索</h1><p>输入中文自然语言需求，自动扩展为英文技术关键词，再并行搜索六个开源平台；Gitee通过本地同源兼容通道读取。</p></div>
         <form id="searchForm" class="search-box">
           <textarea id="query" placeholder="例如：寻找适合网页游戏、允许商用、TypeScript可接入的NPC长期记忆系统"></textarea>
-          <div class="search-controls"><div class="source-select"><label><input type="checkbox" data-search-platform="github" checked> GitHub</label><label><input type="checkbox" data-search-platform="huggingface" checked> Hugging Face</label><label><input type="checkbox" data-search-platform="gitlab" checked> GitLab</label><label><input type="checkbox" data-search-platform="codeberg" checked> Codeberg</label><label title="公开搜索接口可能不稳定"><input type="checkbox" data-search-platform="gitee" checked> Gitee <small>实验</small></label><label title="公开读取或跨域策略可能变化"><input type="checkbox" data-search-platform="modelscope" checked> ModelScope <small>实验</small></label></div><select id="sort"><option value="score">综合潜力</option><option value="popular">Star / Like</option><option value="fresh">最近更新</option></select><button class="primary">开始搜索</button></div>
+          <div class="search-controls"><div class="source-select"><label><input type="checkbox" data-search-platform="github" checked> GitHub</label><label><input type="checkbox" data-search-platform="huggingface" checked> Hugging Face</label><label><input type="checkbox" data-search-platform="gitlab" checked> GitLab</label><label><input type="checkbox" data-search-platform="codeberg" checked> Codeberg</label><label title="公开搜索接口可能不稳定"><input type="checkbox" data-search-platform="gitee" checked> Gitee <small>实验</small></label><label><input type="checkbox" data-search-platform="modelscope" checked> ModelScope</label></div><select id="sort"><option value="score">综合潜力</option><option value="popular">Star / Like</option><option value="fresh">最近更新</option></select><button class="primary">开始搜索</button></div>
         </form>
         <div id="suggestions" class="chips"></div>
         <p id="searchSummary"></p>

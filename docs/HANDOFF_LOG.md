@@ -53,3 +53,18 @@
 - 测试：用户确认首页、分类、用途筛选、收藏、中文搜索流程和Windows PWA安装全部通过。
 - 下一项唯一任务：Phase 0.2-B 接入 GitLab、Codeberg、Gitee、ModelScope 的零成本平台适配器，并明确呈现数据源失败或降级状态。
 - 关键文件：`app.js`、`index.html`、`styles.css`、`sw.js`、`README.md`、`HANDOFF.md`、`docs/PROJECT_STATE.json`、`docs/HANDOFF_LOG.md`。
+
+## 2026-07-28 — Phase 0.2-B multi-platform adapters
+- 当前阶段：Phase 0.2-B — Multi-Platform Public API Adapters
+- 分支：`phase-0.2-b-multi-platform-adapters`
+- Functional HEAD：`ceb75c5`
+- 当前状态：六平台功能代码完成；本地静态、HTTP与Chromium模拟桌面/移动端测试通过；真实外部API和用户Windows验收未完成。
+- 已完成：统一适配器；GitHub、Hugging Face、GitLab、Codeberg、Gitee、ModelScope；六平台筛选与并行搜索；平台状态与失败降级；备用搜索链接；平台指标差异化；中文平台原始查询；PWA缓存v3；可重复模拟浏览器测试。
+- 未完成：用户真实API/CORS验收；Gitee/ModelScope稳定性结论；跨平台身份去重；历史快照与真实增长；软件包生态；外部热点；云收藏；MCP；生产部署。
+- 当前阻塞：开发容器无法验证外部API/CORS；容器Chromium localhost导航被管理员策略阻止；需用户Windows Edge验收。
+- 禁止事项：不得把代理分写成真实涨幅；不得混同比较不同平台原始热度；不得把模拟通过写成真实API通过；实验平台不得提前转正式；不得暴露密钥；不得破坏收藏；不得加入付费API。
+- 已知问题和风险：Gitee接口可能不稳定；ModelScope字段和公开读取策略可能变化；GitLab许可证/语言元数据不足；Codeberg实例参数可能变化；跨平台镜像未去重；匿名请求可能限频；localStorage仍可能被清除。
+- 工作区/暂存/提交/标签/推送/合并：功能提交后working tree clean；写入本交接后dirty；staged none；commit `ceb75c5`；tags none；not pushed；merge none。
+- 测试：JS语法、Manifest、diff、HTTP静态资源、六平台桌面模拟、390px移动端、中文扩展、中文平台原始查询、六种返回结构与收藏键均通过；真实外部API与用户Windows未执行。
+- 下一项唯一任务：用户Windows Edge逐项验证六个平台首页和搜索状态，只修复API/CORS/字段兼容缺陷，验收前不进入历史快照。
+- 关键文件：`platform-adapters.js`、`app.js`、`index.html`、`styles.css`、`sw.js`、`tests/browser_mock_test.py`、`README.md`、`HANDOFF.md`、`docs/PROJECT_STATE.json`、`docs/HANDOFF_LOG.md`。

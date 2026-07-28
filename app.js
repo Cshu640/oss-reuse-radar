@@ -1,36 +1,752 @@
-const KEY='openradar:favorites:v1';
-const categories=['全部','游戏开发','游戏AI与NPC','3D与动画','AI图片视频','Agent与MCP','Web与App','微信生态','教育产品','内容创作'];
-const keywords={'游戏开发':['game','godot','phaser','pixi','roguelike','rpg'],'游戏AI与NPC':['npc','game ai','memory','behavior tree','agent'],'3D与动画':['3d','rigging','animation','motion','blender','mesh'],'AI图片视频':['image','video','diffusion','vision','text-to-image'],'Agent与MCP':['agent','mcp','codex','claude','workflow'],'Web与App':['typescript','react','next','web app','pwa'],'微信生态':['wechat','mini program','小程序','小游戏'],'教育产品':['education','learning','tutor','children'],'内容创作':['creator','content','audio','social media']};
-const suggestions=['适合网页游戏的程序化地图生成器','允许商用的图片转3D与自动绑定骨骼','TypeScript NPC长期记忆系统','可本地运行的AI视频动作控制','适合Codex使用的MCP开发工具'];
-const seed=[
-{id:'github:ddfriday/repo-pulse',platform:'github',name:'repo-pulse',owner:'ddfriday',description:'追踪公开仓库快照，比较日、周、月增长并发现新兴 GitHub 项目。',url:'https://github.com/ddfriday/repo-pulse',stars:0,forks:0,language:'TypeScript',license:'MIT',createdAt:'2026-07-16',updatedAt:'2026-07-18',category:'Agent与MCP',score:87,topics:['trending','repository-discovery']},
-{id:'github:ecosyste-ms/repos',platform:'github',name:'repos',owner:'ecosyste-ms',description:'跨代码托管平台的仓库元数据开放 API，是跨平台开源情报的重要底座。',url:'https://github.com/ecosyste-ms/repos',stars:0,forks:0,language:'Ruby',license:'AGPL-3.0',createdAt:'2022-01-01',updatedAt:'2026-07-20',category:'Web与App',score:94,topics:['open-source','metadata']},
-{id:'github:X-lab2017/open-digger',platform:'github',name:'OpenDigger',owner:'X-lab2017',description:'开源生态活跃度、贡献者网络与 OpenRank 指标平台，可补充项目健康度分析。',url:'https://github.com/X-lab2017/open-digger',stars:0,forks:0,language:'TypeScript',license:'Apache-2.0',createdAt:'2021-01-01',updatedAt:'2026-07-20',category:'Agent与MCP',score:90,topics:['analytics','github']}
+const FAVORITES_KEY = 'openradar:favorites:v1';
+const RADAR_CACHE_KEY = 'openradar:radar-cache:v2';
+const RADAR_CACHE_TTL = 15 * 60 * 1000;
+
+const categories = [
+  '全部',
+  '游戏开发',
+  '游戏AI与NPC',
+  '3D与动画',
+  'AI图片视频',
+  'Agent与MCP',
+  'Web与App',
+  '微信生态',
+  '教育产品',
+  '内容创作',
+  '办公效率',
+  '生活工具',
+  '商业应用底座',
 ];
-const state={projects:[...seed],results:[],favorites:load(),category:'全部',period:'today',install:null};
-const $=id=>document.getElementById(id);const els=Object.fromEntries([...document.querySelectorAll('[id]')].map(x=>[x.id,x]));
-function load(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}}function persist(){localStorage.setItem(KEY,JSON.stringify(state.favorites));counters()}
-function esc(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}function num(v=0){return new Intl.NumberFormat('zh-CN',{notation:v>=1000?'compact':'standard',maximumFractionDigits:1}).format(v)}
-function days(p){return Math.max(1,(Date.now()-new Date(p.createdAt||Date.now()))/864e5)}function ago(v){if(!v)return'未知';const d=Math.max(0,Math.floor((Date.now()-new Date(v))/864e5));return d<1?'今天':d<30?`${d}天前`:d<365?`${Math.floor(d/30)}个月前`:`${Math.floor(d/365)}年前`}
-function category(p){const text=[p.name,p.description,p.language,...(p.topics||[])].join(' ').toLowerCase();let best='Web与App',n=0;Object.entries(keywords).forEach(([k,a])=>{const s=a.filter(x=>text.includes(x)).length;if(s>n){best=k;n=s}});return best}
-function score(p){if(p.score)return p.score;const pop=p.platform==='huggingface'?(p.likes||0)+Math.log10((p.downloads||0)+1)*25:(p.stars||0);const fresh=Math.max(0,25-Math.min(25,(Date.now()-new Date(p.updatedAt||0))/864e5));return Math.min(99,Math.round(Math.log10(pop+1)*22/Math.pow(days(p),.15)+fresh+(p.description?10:2)))}
-function commercial(l=''){return/MIT|Apache|BSD|ISC|MPL|Unlicense/i.test(l)}function favorite(id){return state.favorites.find(x=>x.id===id)}function find(id){return state.projects.find(x=>x.id===id)||state.results.find(x=>x.id===id)||favorite(id)}
-function toast(m){els.toast.textContent=m;els.toast.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>els.toast.classList.remove('show'),2200)}
-function card(p,saved=false){const f=favorite(p.id),pop=p.platform==='huggingface'?(p.likes||0):(p.stars||0),second=p.platform==='huggingface'?(p.downloads||0):(p.forks||0),platform=p.platform==='huggingface'?'Hugging Face':'GitHub',av=p.avatar?`<img class="avatar" src="${esc(p.avatar)}" alt="">`:`<div class="avatar text">${esc(p.name.slice(0,2).toUpperCase())}</div>`,tags=saved&&f?.tags?.length?`<div class="saved-tags">${f.tags.map(t=>`<span class="saved-tag">${esc(t)}</span>`).join('')}</div>`:'',note=saved&&f?.note?`<div class="saved-note">${esc(f.note)}</div>`:'';return`<article class="card"><div class="card-top">${av}<div class="title"><h3 title="${esc(p.owner+'/'+p.name)}">${esc(p.name)}</h3><p>${esc(p.owner)} · 更新于${ago(p.updatedAt)}</p></div><button class="star ${f?'saved':''}" data-favorite="${esc(p.id)}">${f?'★':'☆'}</button></div><p class="desc">${esc(p.description||'暂无描述，需要进一步读取项目文档。')}</p><div class="badges"><span class="badge platform">${platform}</span><span class="badge">${esc(p.category||category(p))}</span>${p.language?`<span class="badge">${esc(p.language)}</span>`:''}<span class="badge ${commercial(p.license)?'good':'warn'}">${esc(p.license||'许可证待核查')}</span></div>${tags}${note}<div class="stats"><div class="stat"><b>${num(pop)}</b><span>${p.platform==='huggingface'?'Likes':'Stars'}</span></div><div class="stat"><b>${num(second)}</b><span>${p.platform==='huggingface'?'Downloads':'Forks'}</span></div><div class="stat"><b>${ago(p.createdAt)}</b><span>项目年龄</span></div><div class="score" style="--score:${score(p)}">${score(p)}</div></div><div class="actions"><a href="${esc(p.url)}" target="_blank" rel="noopener">打开项目</a><button data-analyze="${esc(p.id)}">适配分析</button>${saved?`<button data-remove="${esc(p.id)}">移出收藏</button>`:''}</div></article>`}
-function bind(root){root.querySelectorAll('[data-favorite]').forEach(b=>b.onclick=()=>openDialog(b.dataset.favorite));root.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{state.favorites=state.favorites.filter(x=>x.id!==b.dataset.remove);persist();toast('已移出收藏')});root.querySelectorAll('[data-analyze]').forEach(b=>b.onclick=()=>toast(`${find(b.dataset.analyze)?.name||'该项目'}：深度适配分析将在 Phase 0.2 接入`))}
-function renderCategories(){els.categories.innerHTML=categories.map(c=>`<button class="category ${c===state.category?'active':''}" data-category="${c}">${c}</button>`).join('')}
-function list(){let a=[...state.projects];if(state.category!=='全部')a=a.filter(p=>(p.category||category(p))===state.category);if(els.platform.value!=='all')a=a.filter(p=>p.platform===els.platform.value);if(els.license.value==='commercial')a=a.filter(p=>commercial(p.license));if(els.license.value==='unknown')a=a.filter(p=>!p.license||/待核查|unknown|other/i.test(p.license));const sort={today:(a,b)=>score(b)-score(a),week:(a,b)=>new Date(b.updatedAt)-new Date(a.updatedAt),month:(a,b)=>(b.stars||b.likes||0)-(a.stars||a.likes||0),rising:(a,b)=>score(b)/Math.log10((b.stars||b.likes||0)+10)-score(a)/Math.log10((a.stars||a.likes||0)+10)};return a.sort(sort[state.period])}
-function render(){const a=list();els.projectGrid.innerHTML=a.length?a.map(p=>card(p)).join(''):'<div class="empty"><h3>没有符合条件的项目</h3></div>';els.candidateMetric.textContent=state.projects.length;els.freshMetric.textContent=state.projects.filter(p=>days(p)<=30).length;bind(els.projectGrid)}
-function renderFavorites(){const q=els.favoriteSearch.value.toLowerCase(),tag=els.tagFilter.value;let a=state.favorites.filter(f=>!q||[f.name,f.owner,f.note,...(f.tags||[])].join(' ').toLowerCase().includes(q)).filter(f=>tag==='all'||f.tags?.includes(tag));els.favoriteEmpty.hidden=!!a.length;els.favoriteGrid.innerHTML=a.map(p=>card(p,true)).join('');const tags=[...new Set(state.favorites.flatMap(f=>f.tags||[]))].sort(),cur=els.tagFilter.value;els.tagFilter.innerHTML='<option value="all">全部标签</option>'+tags.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');if(tags.includes(cur))els.tagFilter.value=cur;bind(els.favoriteGrid)}
-function counters(){els.favoriteCount.textContent=state.favorites.length;els.savedMetric.textContent=state.favorites.length;renderFavorites();render();if(state.results.length)renderResults()}
-function nav(view){document.querySelectorAll('.view,.nav').forEach(x=>x.classList.remove('active'));$(`${view}View`).classList.add('active');document.querySelector(`[data-view="${view}"]`).classList.add('active');els.sidebar.classList.remove('open');if(view==='favorites')renderFavorites()}
-function openDialog(id){const p=find(id),f=favorite(id);if(!p)return;els.projectId.value=id;els.dialogTitle.textContent=f?`编辑收藏 · ${p.name}`:`收藏 · ${p.name}`;els.tags.value=f?.tags?.join(', ')||'';els.note.value=f?.note||'';els.action.value=f?.action||'later';els.dialog.showModal()}
-async function radar(){els.status.textContent='正在查询免费 API…';els.status.className='';els.projectGrid.innerHTML='<div class="card skeleton"></div>'.repeat(6);const rs=await Promise.allSettled([githubRadar(),hfRadar()]),live=rs.filter(r=>r.status==='fulfilled').flatMap(r=>r.value);state.projects=live.length?dedupe([...live,...seed]):[...seed];els.status.textContent=live.length?`实时数据 · ${new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}`:'API暂不可用，显示种子数据';els.status.className=live.length?'live':'warn';render()}
-async function githubRadar(){const d=new Date(Date.now()-30*864e5).toISOString().slice(0,10),u=`https://api.github.com/search/repositories?q=${encodeURIComponent(`created:>${d} stars:>20 archived:false`)}&sort=stars&order=desc&per_page=18`,r=await fetch(u,{headers:{Accept:'application/vnd.github+json'}});if(!r.ok)throw 0;return(await r.json()).items.map(github)}
-function github(r){const p={id:`github:${r.full_name}`,platform:'github',name:r.name,owner:r.owner?.login||'',description:r.description||'',url:r.html_url,avatar:r.owner?.avatar_url||'',stars:r.stargazers_count||0,forks:r.forks_count||0,language:r.language||'',license:r.license?.spdx_id||'许可证待核查',updatedAt:r.pushed_at||r.updated_at,createdAt:r.created_at,topics:r.topics||[]};p.category=category(p);p.score=score(p);return p}
-async function hfRadar(){const r=await fetch('https://huggingface.co/api/models?sort=trendingScore&direction=-1&limit=18&full=false');if(!r.ok)throw 0;return(await r.json()).map(hf)}
-function hf(m){const [owner,...name]=m.id.split('/'),p={id:`huggingface:${m.id}`,platform:'huggingface',name:name.join('/')||m.id,owner,description:`${m.pipeline_tag?`任务：${m.pipeline_tag}。`:''}${(m.tags||[]).slice(0,4).join(' · ')}`,url:`https://huggingface.co/${m.id}`,likes:m.likes||0,downloads:m.downloads||0,language:m.library_name||m.pipeline_tag||'',license:(m.tags||[]).find(x=>x.startsWith('license:'))?.replace('license:','')||'许可证待核查',updatedAt:m.lastModified||m.last_modified||new Date().toISOString(),createdAt:m.createdAt||m.created_at||m.lastModified,topics:m.tags||[]};p.category=category(p);p.score=score(p);return p}
-function dedupe(a){return[...new Map(a.map(p=>[p.id,p])).values()]}
-async function search(q){const jobs=[];if(els.useGitHub.checked)jobs.push(fetch(`https://api.github.com/search/repositories?q=${encodeURIComponent(q+' archived:false')}&sort=stars&order=desc&per_page=20`,{headers:{Accept:'application/vnd.github+json'}}).then(r=>{if(!r.ok)throw 0;return r.json()}).then(x=>x.items.map(github)));if(els.useHF.checked)jobs.push(fetch(`https://huggingface.co/api/models?search=${encodeURIComponent(q)}&sort=downloads&direction=-1&limit=20&full=false`).then(r=>{if(!r.ok)throw 0;return r.json()}).then(x=>x.map(hf)));if(!jobs.length)return toast('请至少选择一个数据源');els.searchSummary.textContent='正在跨平台搜索…';els.searchGrid.innerHTML='<div class="card skeleton"></div>'.repeat(4);const rs=await Promise.allSettled(jobs);state.results=dedupe(rs.filter(r=>r.status==='fulfilled').flatMap(r=>r.value));sortResults();els.searchSummary.textContent=`“${q}” 找到 ${state.results.length} 个候选。许可证需在正式采用前再次核查。`;renderResults()}
-function sortResults(){const s={score:(a,b)=>score(b)-score(a),popular:(a,b)=>(b.stars||b.likes||0)-(a.stars||a.likes||0),fresh:(a,b)=>new Date(b.updatedAt)-new Date(a.updatedAt)};state.results.sort(s[els.sort.value])}function renderResults(){els.searchGrid.innerHTML=state.results.length?state.results.map(p=>card(p)).join(''):'<div class="empty"><h3>没有找到结果</h3><p>尝试使用英文技术关键词。</p></div>';bind(els.searchGrid)}
-function init(){renderCategories();els.suggestions.innerHTML=suggestions.map(q=>`<button class="chip" data-query="${esc(q)}">${esc(q)}</button>`).join('');document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>nav(b.dataset.view));els.categories.onclick=e=>{const b=e.target.closest('[data-category]');if(!b)return;state.category=b.dataset.category;renderCategories();render();nav('radar')};document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.period=b.dataset.period;render()});els.platform.onchange=render;els.license.onchange=render;els.refresh.onclick=radar;els.menu.onclick=()=>els.sidebar.classList.toggle('open');els.quickSearch.onkeydown=e=>{if(e.key==='Enter'&&e.target.value.trim()){els.query.value=e.target.value.trim();nav('search');search(els.query.value)}};els.searchForm.onsubmit=e=>{e.preventDefault();const q=els.query.value.trim();q?search(q):toast('请输入搜索需求')};els.sort.onchange=()=>{sortResults();renderResults()};els.suggestions.onclick=e=>{const b=e.target.closest('[data-query]');if(b){els.query.value=b.dataset.query;search(b.dataset.query)}};els.favoriteForm.onsubmit=e=>{e.preventDefault();const p=find(els.projectId.value);if(!p)return;const item={...p,tags:els.tags.value.split(/[,，]/).map(x=>x.trim()).filter(Boolean),note:els.note.value.trim(),action:els.action.value,savedAt:favorite(p.id)?.savedAt||new Date().toISOString()};state.favorites=[item,...state.favorites.filter(x=>x.id!==p.id)];persist();els.dialog.close();toast('已保存到收藏库')};els.closeDialog.onclick=els.cancel.onclick=()=>els.dialog.close();els.favoriteSearch.oninput=renderFavorites;els.tagFilter.onchange=renderFavorites;els.export.onclick=()=>{const blob=new Blob([JSON.stringify(state.favorites,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=`openradar-favorites-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u)};els.clear.onclick=()=>{if(state.favorites.length&&confirm('确定清空全部收藏吗？')){state.favorites=[];persist();toast('收藏已清空')}};window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();state.install=e;els.install.hidden=false});els.install.onclick=async()=>{if(state.install){state.install.prompt();await state.install.userChoice;state.install=null;els.install.hidden=true}};counters();radar();if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{})}init();
+
+const categoryRules = [
+  ['游戏AI与NPC', ['npc', 'game ai', 'behavior tree', 'game agent', 'character memory', 'game memory', 'dialogue system']],
+  ['3D与动画', ['3d', 'rigging', 'animation', 'motion capture', 'retargeting', 'blender', 'mesh', 'avatar']],
+  ['AI图片视频', ['text-to-image', 'image generation', 'video generation', 'diffusion', 'computer vision', 'image edit', 'video edit']],
+  ['Agent与MCP', ['agent', 'mcp', 'codex', 'claude code', 'multi-agent', 'tool calling', 'rag', 'llm workflow']],
+  ['微信生态', ['wechat', 'mini program', 'miniprogram', '小程序', '小游戏']],
+  ['教育产品', ['education', 'learning', 'tutor', 'children', 'school', 'quiz', 'course', 'flashcard']],
+  ['内容创作', ['creator', 'content', 'newsletter', 'podcast', 'audio editor', 'social media', 'subtitle', 'transcription']],
+  ['办公效率', ['office', 'productivity', 'document', 'pdf', 'ocr', 'spreadsheet', 'presentation', 'calendar', 'email', 'meeting', 'notes', 'knowledge base', 'kanban', 'project management', 'task management', 'collaboration', 'file manager', 'markdown editor']],
+  ['生活工具', ['personal finance', 'budget', 'expense', 'health', 'fitness', 'sleep', 'recipe', 'meal planner', 'shopping list', 'travel', 'trip planner', 'itinerary', 'home automation', 'smart home', 'photo management', 'media server', 'password manager', 'habit', 'journal', 'family', 'parenting', 'pet', 'grocery']],
+  ['商业应用底座', ['saas', 'crm', 'erp', 'ecommerce', 'e-commerce', 'billing', 'invoice', 'booking', 'marketplace', 'customer support', 'admin dashboard', 'multi-tenant', 'inventory management', 'point of sale']],
+  ['游戏开发', ['game', 'godot', 'phaser', 'pixi', 'roguelike', 'rpg', 'game engine', 'level editor', 'procedural generation']],
+  ['Web与App', ['typescript', 'javascript', 'react', 'next.js', 'web app', 'pwa', 'mobile app', 'desktop app', 'frontend', 'backend']],
+];
+
+const useTypeLabels = {
+  direct: '直接安装使用',
+  selfhost: '适合个人部署',
+  codex: '适合Codex二次开发',
+  component: '技术组件',
+  reference: '适合模仿产品设计',
+  business: '存在商业化机会',
+};
+
+const actionLabels = {
+  later: '以后研究',
+  test: '立即测试',
+  codex: '交给 Codex 分析',
+  reference: '只参考设计',
+};
+
+const searchRules = [
+  { re: /网页游戏|web游戏|h5游戏|浏览器游戏/i, primary: ['web', 'game', 'typescript'], anchors: ['game'], alternate: ['browser', 'javascript', 'phaser'] },
+  { re: /npc|非玩家角色/i, primary: ['npc'], anchors: ['npc'], alternate: ['agent', 'character'] },
+  { re: /长期记忆|持久记忆|记忆系统|记忆/i, primary: ['memory'], anchors: ['memory'], alternate: ['persistent', 'long-term'] },
+  { re: /程序化地图|程序化生成|随机地图|随机地牢/i, primary: ['procedural', 'generation'], anchors: ['procedural'], alternate: ['dungeon', 'level', 'map'] },
+  { re: /图片转3d|图像转3d|image to 3d/i, primary: ['image', '3d'], anchors: ['3d'], alternate: ['mesh', 'reconstruction'] },
+  { re: /骨骼绑定|自动绑定|rigging/i, primary: ['rigging'], anchors: ['rigging'], alternate: ['auto-rig', 'skeleton'] },
+  { re: /动画重定向|动作重定向|retarget/i, primary: ['animation', 'retargeting'], anchors: ['retargeting'], alternate: ['motion', 'skeleton'] },
+  { re: /办公|办公效率|生产力/i, primary: ['productivity'], anchors: ['productivity'], alternate: ['office', 'workflow'] },
+  { re: /文档|知识库|笔记/i, primary: ['document'], anchors: ['document'], alternate: ['knowledge-base', 'notes', 'markdown'] },
+  { re: /表格|电子表格|excel/i, primary: ['spreadsheet'], anchors: ['spreadsheet'], alternate: ['table', 'data'] },
+  { re: /ppt|演示文稿|幻灯片/i, primary: ['presentation'], anchors: ['presentation'], alternate: ['slides', 'powerpoint'] },
+  { re: /会议纪要|会议记录/i, primary: ['meeting', 'transcription'], anchors: ['meeting'], alternate: ['minutes', 'summary'] },
+  { re: /项目管理|任务管理|看板/i, primary: ['project', 'management'], anchors: ['management'], alternate: ['kanban', 'tasks'] },
+  { re: /记账|个人财务|预算/i, primary: ['personal-finance', 'budget'], anchors: ['budget'], alternate: ['expense', 'accounting'] },
+  { re: /健康|运动|健身/i, primary: ['health', 'fitness'], anchors: ['health'], alternate: ['workout', 'wellness'] },
+  { re: /菜谱|食谱|做饭/i, primary: ['recipe'], anchors: ['recipe'], alternate: ['meal', 'cooking'] },
+  { re: /旅行|行程|旅游规划/i, primary: ['travel', 'planner'], anchors: ['travel'], alternate: ['trip', 'itinerary'] },
+  { re: /智能家居/i, primary: ['home', 'automation'], anchors: ['automation'], alternate: ['smart-home', 'iot'] },
+  { re: /相册|照片管理/i, primary: ['photo', 'management'], anchors: ['photo'], alternate: ['gallery', 'backup'] },
+  { re: /密码|隐私/i, primary: ['privacy'], anchors: ['privacy'], alternate: ['password', 'security'] },
+  { re: /crm|客户管理/i, primary: ['crm'], anchors: ['crm'], alternate: ['customer', 'sales'] },
+  { re: /erp|进销存/i, primary: ['erp'], anchors: ['erp'], alternate: ['inventory', 'business'] },
+  { re: /微信小程序|小程序/i, primary: ['wechat', 'miniprogram'], anchors: ['wechat'], alternate: ['mini-program'] },
+  { re: /允许商用|可商用|商业使用/i, primary: [], anchors: [], alternate: [] },
+  { re: /开源|开放源代码/i, primary: [], anchors: [], alternate: [] },
+];
+
+const suggestions = [
+  '适合网页游戏的开源NPC记忆系统',
+  '允许商用的图片转3D与自动绑定骨骼',
+  '开源PDF、OCR与文档整理工作台',
+  '适合个人部署的记账和家庭财务系统',
+  '旅行规划、行程管理与地图工具',
+  '适合Codex二次开发的CRM或SaaS底座',
+];
+
+const seed = [
+  {
+    id: 'github:ddfriday/repo-pulse',
+    platform: 'github',
+    name: 'repo-pulse',
+    owner: 'ddfriday',
+    description: '追踪公开仓库快照，比较日、周、月增长并发现新兴 GitHub 项目。',
+    url: 'https://github.com/ddfriday/repo-pulse',
+    stars: 0,
+    forks: 0,
+    language: 'TypeScript',
+    license: 'MIT',
+    createdAt: '2026-07-16',
+    updatedAt: '2026-07-18',
+    category: 'Agent与MCP',
+    useTypes: ['codex', 'component'],
+    score: 87,
+    topics: ['trending', 'repository-discovery'],
+  },
+  {
+    id: 'github:ecosyste-ms/repos',
+    platform: 'github',
+    name: 'repos',
+    owner: 'ecosyste-ms',
+    description: '跨代码托管平台的仓库元数据开放 API，是跨平台开源情报的重要底座。',
+    url: 'https://github.com/ecosyste-ms/repos',
+    stars: 0,
+    forks: 0,
+    language: 'Ruby',
+    license: 'AGPL-3.0',
+    createdAt: '2022-01-01',
+    updatedAt: '2026-07-20',
+    category: 'Web与App',
+    useTypes: ['component', 'codex'],
+    score: 94,
+    topics: ['open-source', 'metadata'],
+  },
+  {
+    id: 'github:X-lab2017/open-digger',
+    platform: 'github',
+    name: 'OpenDigger',
+    owner: 'X-lab2017',
+    description: '开源生态活跃度、贡献者网络与 OpenRank 指标平台，可补充项目健康度分析。',
+    url: 'https://github.com/X-lab2017/open-digger',
+    stars: 0,
+    forks: 0,
+    language: 'TypeScript',
+    license: 'Apache-2.0',
+    createdAt: '2021-01-01',
+    updatedAt: '2026-07-20',
+    category: 'Agent与MCP',
+    useTypes: ['component', 'codex'],
+    score: 90,
+    topics: ['analytics', 'github'],
+  },
+];
+
+const state = {
+  projects: seed.map(normalizeProject),
+  results: [],
+  favorites: loadFavorites().map(normalizeProject),
+  category: '全部',
+  period: 'today',
+  install: null,
+  lastSearchPlan: null,
+};
+
+const $ = (id) => document.getElementById(id);
+const els = Object.fromEntries([...document.querySelectorAll('[id]')].map((node) => [node.id, node]));
+
+function loadFavorites() {
+  try {
+    const value = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistFavorites() {
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify(state.favorites));
+  updateCounters();
+}
+
+function loadRadarCache() {
+  try {
+    const cache = JSON.parse(localStorage.getItem(RADAR_CACHE_KEY) || 'null');
+    if (!cache || !Array.isArray(cache.projects) || Date.now() - cache.savedAt > RADAR_CACHE_TTL) return null;
+    return cache.projects.map(normalizeProject);
+  } catch {
+    return null;
+  }
+}
+
+function saveRadarCache(projects) {
+  try {
+    localStorage.setItem(RADAR_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), projects }));
+  } catch {
+    // 缓存失败不影响主流程。
+  }
+}
+
+function escapeHtml(value = '') {
+  return String(value).replace(/[&<>'"]/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;',
+  }[character]));
+}
+
+function formatNumber(value = 0) {
+  return new Intl.NumberFormat('zh-CN', {
+    notation: value >= 1000 ? 'compact' : 'standard',
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function projectAgeDays(project) {
+  const createdAt = new Date(project.createdAt || Date.now()).getTime();
+  return Math.max(1, (Date.now() - createdAt) / 864e5);
+}
+
+function timeAgo(value) {
+  if (!value) return '未知';
+  const days = Math.max(0, Math.floor((Date.now() - new Date(value)) / 864e5));
+  if (days < 1) return '今天';
+  if (days < 30) return `${days}天前`;
+  if (days < 365) return `${Math.floor(days / 30)}个月前`;
+  return `${Math.floor(days / 365)}年前`;
+}
+
+function projectText(project) {
+  return [project.name, project.description, project.language, ...(project.topics || [])].join(' ').toLowerCase();
+}
+
+function classifyCategory(project) {
+  const text = projectText(project);
+  let bestCategory = 'Web与App';
+  let bestScore = 0;
+
+  for (const [name, terms] of categoryRules) {
+    let categoryScore = 0;
+    for (const term of terms) {
+      if (!text.includes(term)) continue;
+      categoryScore += term.includes(' ') || term.includes('-') ? 3 : 1;
+    }
+    if (categoryScore > bestScore) {
+      bestCategory = name;
+      bestScore = categoryScore;
+    }
+  }
+
+  return bestCategory;
+}
+
+function inferUseTypes(project) {
+  if (Array.isArray(project.useTypes) && project.useTypes.length) return [...new Set(project.useTypes)];
+  const text = projectText(project);
+  const types = [];
+  const add = (type) => {
+    if (!types.includes(type)) types.push(type);
+  };
+
+  if (/desktop|mobile app|web app|productivity|office|personal finance|budget|recipe|travel|photo management|password manager|home automation|notes|document|pdf|calendar|kanban|media server/.test(text)) add('direct');
+  if (/self-hosted|selfhosted|docker compose|home server|private cloud|on-premise|local-first/.test(text)) add('selfhost');
+  if (/library|sdk|framework|plugin|component|api|package|engine|toolkit|protocol/.test(text)) add('component');
+  if (/starter|template|boilerplate|platform|dashboard|saas|crm|erp|ecommerce|booking|marketplace|app|server/.test(text)) add('codex');
+  if (/clone|alternative|design system|ui kit|showcase|interface|theme/.test(text)) add('reference');
+  if (/saas|crm|erp|ecommerce|billing|invoice|booking|marketplace|customer support|point of sale|business/.test(text)) add('business');
+
+  if (!types.length) add('codex');
+  if (types.length === 1 && types[0] === 'direct') add('codex');
+  return types.slice(0, 3);
+}
+
+function normalizeProject(project) {
+  const normalized = { ...project };
+  normalized.topics = Array.isArray(normalized.topics) ? normalized.topics : [];
+  normalized.category = normalized.category || classifyCategory(normalized);
+  normalized.useTypes = inferUseTypes(normalized);
+  return normalized;
+}
+
+function potentialScore(project) {
+  if (project.score) return project.score;
+  const popularity = project.platform === 'huggingface'
+    ? (project.likes || 0) + Math.log10((project.downloads || 0) + 1) * 25
+    : (project.stars || 0);
+  const freshness = Math.max(0, 25 - Math.min(25, (Date.now() - new Date(project.updatedAt || 0)) / 864e5));
+  return Math.min(99, Math.round(Math.log10(popularity + 1) * 22 / Math.pow(projectAgeDays(project), 0.15) + freshness + (project.description ? 10 : 2)));
+}
+
+function commercialFriendly(license = '') {
+  return /MIT|Apache|BSD|ISC|MPL|Unlicense/i.test(license);
+}
+
+function favoriteById(id) {
+  return state.favorites.find((item) => item.id === id);
+}
+
+function findProject(id) {
+  return state.projects.find((item) => item.id === id)
+    || state.results.find((item) => item.id === id)
+    || favoriteById(id);
+}
+
+function toast(message) {
+  els.toast.textContent = message;
+  els.toast.classList.add('show');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => els.toast.classList.remove('show'), 2200);
+}
+
+function projectCard(project, saved = false) {
+  const favorite = favoriteById(project.id);
+  const popularity = project.platform === 'huggingface' ? (project.likes || 0) : (project.stars || 0);
+  const secondary = project.platform === 'huggingface' ? (project.downloads || 0) : (project.forks || 0);
+  const platformLabel = project.platform === 'huggingface' ? 'Hugging Face' : 'GitHub';
+  const avatar = project.avatar
+    ? `<img class="avatar" src="${escapeHtml(project.avatar)}" alt="">`
+    : `<div class="avatar text">${escapeHtml(project.name.slice(0, 2).toUpperCase())}</div>`;
+  const savedTags = saved && favorite?.tags?.length
+    ? `<div class="saved-tags">${favorite.tags.map((tag) => `<span class="saved-tag">${escapeHtml(tag)}</span>`).join('')}</div>`
+    : '';
+  const savedNote = saved && favorite?.note ? `<div class="saved-note">${escapeHtml(favorite.note)}</div>` : '';
+  const savedAction = saved && favorite?.action
+    ? `<span class="saved-action">下一步：${escapeHtml(actionLabels[favorite.action] || favorite.action)}</span>`
+    : '';
+  const useBadges = inferUseTypes(project)
+    .map((type) => `<span class="badge use-type">${escapeHtml(useTypeLabels[type] || type)}</span>`)
+    .join('');
+
+  return `<article class="card">
+    <div class="card-top">
+      ${avatar}
+      <div class="title"><h3 title="${escapeHtml(`${project.owner}/${project.name}`)}">${escapeHtml(project.name)}</h3><p>${escapeHtml(project.owner)} · 更新于${timeAgo(project.updatedAt)}</p></div>
+      <button class="star ${favorite ? 'saved' : ''}" data-favorite="${escapeHtml(project.id)}" aria-label="收藏项目">${favorite ? '★' : '☆'}</button>
+    </div>
+    <p class="desc">${escapeHtml(project.description || '暂无描述，需要进一步读取项目文档。')}</p>
+    <div class="badges">
+      <span class="badge platform">${platformLabel}</span>
+      <span class="badge">${escapeHtml(project.category || classifyCategory(project))}</span>
+      ${project.language ? `<span class="badge">${escapeHtml(project.language)}</span>` : ''}
+      <span class="badge ${commercialFriendly(project.license) ? 'good' : 'warn'}">${escapeHtml(project.license || '许可证待核查')}</span>
+    </div>
+    <div class="use-types">${useBadges}</div>
+    ${savedTags}${savedAction}${savedNote}
+    <div class="stats">
+      <div class="stat"><b>${formatNumber(popularity)}</b><span>${project.platform === 'huggingface' ? 'Likes' : 'Stars'}</span></div>
+      <div class="stat"><b>${formatNumber(secondary)}</b><span>${project.platform === 'huggingface' ? 'Downloads' : 'Forks'}</span></div>
+      <div class="stat"><b>${timeAgo(project.createdAt)}</b><span>项目年龄</span></div>
+      <div class="score" style="--score:${potentialScore(project)}">${potentialScore(project)}</div>
+    </div>
+    <div class="actions">
+      <a href="${escapeHtml(project.url)}" target="_blank" rel="noopener">打开项目</a>
+      <button data-analyze="${escapeHtml(project.id)}">适配分析</button>
+      ${saved ? `<button data-remove="${escapeHtml(project.id)}">移出收藏</button>` : ''}
+    </div>
+  </article>`;
+}
+
+function bindProjectActions(root) {
+  root.querySelectorAll('[data-favorite]').forEach((button) => {
+    button.onclick = () => openFavoriteDialog(button.dataset.favorite);
+  });
+  root.querySelectorAll('[data-remove]').forEach((button) => {
+    button.onclick = () => {
+      state.favorites = state.favorites.filter((item) => item.id !== button.dataset.remove);
+      persistFavorites();
+      toast('已移出收藏');
+    };
+  });
+  root.querySelectorAll('[data-analyze]').forEach((button) => {
+    button.onclick = () => toast(`${findProject(button.dataset.analyze)?.name || '该项目'}：深度适配分析将在后续阶段接入`);
+  });
+}
+
+function renderCategories() {
+  els.categories.innerHTML = categories
+    .map((name) => `<button class="category ${name === state.category ? 'active' : ''}" data-category="${name}">${name}</button>`)
+    .join('');
+}
+
+function filteredProjects() {
+  let projects = [...state.projects];
+  if (state.category !== '全部') projects = projects.filter((project) => (project.category || classifyCategory(project)) === state.category);
+  if (els.platform.value !== 'all') projects = projects.filter((project) => project.platform === els.platform.value);
+  if (els.license.value === 'commercial') projects = projects.filter((project) => commercialFriendly(project.license));
+  if (els.license.value === 'unknown') projects = projects.filter((project) => !project.license || /待核查|unknown|other/i.test(project.license));
+  if (els.useType.value !== 'all') projects = projects.filter((project) => inferUseTypes(project).includes(els.useType.value));
+
+  const sorters = {
+    today: (a, b) => potentialScore(b) - potentialScore(a),
+    week: (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt),
+    month: (a, b) => (b.stars || b.likes || 0) - (a.stars || a.likes || 0),
+    rising: (a, b) => potentialScore(b) / Math.log10((b.stars || b.likes || 0) + 10) - potentialScore(a) / Math.log10((a.stars || a.likes || 0) + 10),
+  };
+  return projects.sort(sorters[state.period]);
+}
+
+function renderRadar() {
+  const projects = filteredProjects();
+  els.projectGrid.innerHTML = projects.length
+    ? projects.map((project) => projectCard(project)).join('')
+    : '<div class="empty"><h3>没有符合条件的项目</h3><p>可以切换分类、用途或许可证筛选。</p></div>';
+  els.candidateMetric.textContent = state.projects.length;
+  els.freshMetric.textContent = state.projects.filter((project) => projectAgeDays(project) <= 30).length;
+  bindProjectActions(els.projectGrid);
+}
+
+function renderFavorites() {
+  const query = els.favoriteSearch.value.toLowerCase();
+  const selectedTag = els.tagFilter.value;
+  let favorites = state.favorites
+    .filter((favorite) => !query || [favorite.name, favorite.owner, favorite.note, favorite.category, ...inferUseTypes(favorite).map((type) => useTypeLabels[type]), ...(favorite.tags || [])].join(' ').toLowerCase().includes(query))
+    .filter((favorite) => selectedTag === 'all' || favorite.tags?.includes(selectedTag));
+
+  els.favoriteEmpty.hidden = Boolean(favorites.length);
+  els.favoriteGrid.innerHTML = favorites.map((project) => projectCard(project, true)).join('');
+
+  const tags = [...new Set(state.favorites.flatMap((favorite) => favorite.tags || []))].sort();
+  const currentTag = els.tagFilter.value;
+  els.tagFilter.innerHTML = '<option value="all">全部标签</option>' + tags.map((tag) => `<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`).join('');
+  if (tags.includes(currentTag)) els.tagFilter.value = currentTag;
+  bindProjectActions(els.favoriteGrid);
+}
+
+function updateCounters() {
+  els.favoriteCount.textContent = state.favorites.length;
+  els.savedMetric.textContent = state.favorites.length;
+  renderFavorites();
+  renderRadar();
+  if (state.results.length) renderResults();
+}
+
+function navigate(view) {
+  document.querySelectorAll('.view,.nav').forEach((node) => node.classList.remove('active'));
+  $(`${view}View`).classList.add('active');
+  document.querySelector(`[data-view="${view}"]`).classList.add('active');
+  els.sidebar.classList.remove('open');
+  if (view === 'favorites') renderFavorites();
+}
+
+function openFavoriteDialog(id) {
+  const project = findProject(id);
+  const favorite = favoriteById(id);
+  if (!project) return;
+  els.projectId.value = id;
+  els.dialogTitle.textContent = favorite ? `编辑收藏 · ${project.name}` : `收藏 · ${project.name}`;
+  els.tags.value = favorite?.tags?.join(', ') || '';
+  els.note.value = favorite?.note || '';
+  els.action.value = favorite?.action || 'later';
+  els.dialog.showModal();
+}
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, options);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
+async function searchGitHubRepositories(query, perPage = 12) {
+  const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(`${query} archived:false`)}&sort=stars&order=desc&per_page=${perPage}`;
+  const data = await fetchJson(url, { headers: { Accept: 'application/vnd.github+json' } });
+  return (data.items || []).map(fromGitHub);
+}
+
+async function searchHuggingFaceModels(query, limit = 12) {
+  const url = `https://huggingface.co/api/models?search=${encodeURIComponent(query)}&sort=downloads&direction=-1&limit=${limit}&full=false`;
+  const data = await fetchJson(url);
+  return data.map(fromHuggingFace);
+}
+
+async function radar(force = false) {
+  if (!force) {
+    const cached = loadRadarCache();
+    if (cached?.length) {
+      state.projects = dedupeProjects([...cached, ...seed.map(normalizeProject)]);
+      els.status.textContent = '本地缓存 · 点击刷新可重新扫描';
+      els.status.className = 'live';
+      renderRadar();
+      return;
+    }
+  }
+
+  els.status.textContent = '正在查询免费 API…';
+  els.status.className = '';
+  els.projectGrid.innerHTML = '<div class="card skeleton"></div>'.repeat(6);
+  const responses = await Promise.allSettled([githubRadar(), huggingFaceRadar()]);
+  const liveProjects = responses.filter((response) => response.status === 'fulfilled').flatMap((response) => response.value);
+  state.projects = liveProjects.length
+    ? dedupeProjects([...liveProjects, ...seed.map(normalizeProject)])
+    : seed.map(normalizeProject);
+
+  if (liveProjects.length) saveRadarCache(state.projects);
+  els.status.textContent = liveProjects.length
+    ? `实时数据 · ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`
+    : 'API暂不可用，显示种子数据';
+  els.status.className = liveProjects.length ? 'live' : 'warn';
+  renderRadar();
+}
+
+async function githubRadar() {
+  const date = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+  const queries = [
+    `created:>${date} stars:>20`,
+    'topic:productivity stars:>200',
+    'topic:personal-finance stars:>100',
+    'topic:home-automation stars:>100',
+  ];
+  const responses = await Promise.allSettled(queries.map((query, index) => searchGitHubRepositories(query, index === 0 ? 18 : 10)));
+  const projects = responses.filter((response) => response.status === 'fulfilled').flatMap((response) => response.value);
+  if (!projects.length) throw new Error('GitHub radar unavailable');
+  return dedupeProjects(projects);
+}
+
+function fromGitHub(repository) {
+  return normalizeProject({
+    id: `github:${repository.full_name}`,
+    platform: 'github',
+    name: repository.name,
+    owner: repository.owner?.login || '',
+    description: repository.description || '',
+    url: repository.html_url,
+    avatar: repository.owner?.avatar_url || '',
+    stars: repository.stargazers_count || 0,
+    forks: repository.forks_count || 0,
+    language: repository.language || '',
+    license: repository.license?.spdx_id || '许可证待核查',
+    updatedAt: repository.pushed_at || repository.updated_at,
+    createdAt: repository.created_at,
+    topics: repository.topics || [],
+  });
+}
+
+async function huggingFaceRadar() {
+  const data = await fetchJson('https://huggingface.co/api/models?sort=trendingScore&direction=-1&limit=18&full=false');
+  return data.map(fromHuggingFace);
+}
+
+function fromHuggingFace(model) {
+  const [owner, ...name] = model.id.split('/');
+  return normalizeProject({
+    id: `huggingface:${model.id}`,
+    platform: 'huggingface',
+    name: name.join('/') || model.id,
+    owner,
+    description: `${model.pipeline_tag ? `任务：${model.pipeline_tag}。` : ''}${(model.tags || []).slice(0, 4).join(' · ')}`,
+    url: `https://huggingface.co/${model.id}`,
+    likes: model.likes || 0,
+    downloads: model.downloads || 0,
+    language: model.library_name || model.pipeline_tag || '',
+    license: (model.tags || []).find((tag) => tag.startsWith('license:'))?.replace('license:', '') || '许可证待核查',
+    updatedAt: model.lastModified || model.last_modified || new Date().toISOString(),
+    createdAt: model.createdAt || model.created_at || model.lastModified,
+    topics: model.tags || [],
+  });
+}
+
+function dedupeProjects(projects) {
+  return [...new Map(projects.map((project) => [project.id, normalizeProject(project)])).values()];
+}
+
+function unique(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function expandSearchQuery(query) {
+  const asciiTerms = (query.match(/[A-Za-z0-9.+#-]{2,}/g) || []).map((term) => term.toLowerCase());
+  const primary = [...asciiTerms];
+  const anchors = [];
+  const alternate = [];
+  let matchedRules = 0;
+
+  for (const rule of searchRules) {
+    if (!rule.re.test(query)) continue;
+    matchedRules += 1;
+    primary.push(...rule.primary);
+    anchors.push(...rule.anchors);
+    alternate.push(...rule.alternate);
+  }
+
+  const primaryTerms = unique(primary).slice(0, 7);
+  const anchorTerms = unique(anchors).slice(0, 5);
+  const alternateTerms = unique([...anchorTerms, ...alternate]).slice(0, 7);
+  const queries = [];
+
+  if (primaryTerms.length) queries.push(primaryTerms.join(' '));
+  if (anchorTerms.length && anchorTerms.join(' ') !== primaryTerms.join(' ')) queries.push(anchorTerms.join(' '));
+  if (alternateTerms.length && !queries.includes(alternateTerms.join(' '))) queries.push(alternateTerms.join(' '));
+  if (!queries.length) queries.push(query);
+
+  return {
+    original: query,
+    matchedRules,
+    terms: unique([...primaryTerms, ...alternateTerms]),
+    queries: unique(queries).slice(0, 3),
+  };
+}
+
+async function searchProjects(query) {
+  const plan = expandSearchQuery(query);
+  state.lastSearchPlan = plan;
+  const jobs = [];
+
+  if (els.useGitHub.checked) {
+    jobs.push(Promise.allSettled(plan.queries.map((expandedQuery) => searchGitHubRepositories(expandedQuery, 12)))
+      .then((responses) => responses.filter((response) => response.status === 'fulfilled').flatMap((response) => response.value)));
+  }
+  if (els.useHF.checked) {
+    jobs.push(Promise.allSettled(plan.queries.slice(0, 2).map((expandedQuery) => searchHuggingFaceModels(expandedQuery, 12)))
+      .then((responses) => responses.filter((response) => response.status === 'fulfilled').flatMap((response) => response.value)));
+  }
+  if (!jobs.length) {
+    toast('请至少选择一个数据源');
+    return;
+  }
+
+  els.searchSummary.textContent = '正在理解需求并跨平台搜索…';
+  els.searchGrid.innerHTML = '<div class="card skeleton"></div>'.repeat(4);
+  const responses = await Promise.allSettled(jobs);
+  state.results = dedupeProjects(responses.filter((response) => response.status === 'fulfilled').flatMap((response) => response.value));
+  sortSearchResults();
+
+  const expanded = plan.terms.length ? `已扩展关键词：${plan.terms.slice(0, 10).join(' · ')}。` : '';
+  els.searchSummary.textContent = `“${query}” 找到 ${state.results.length} 个候选。${expanded}许可证需在正式采用前再次核查。`;
+  renderResults();
+}
+
+function sortSearchResults() {
+  const sorters = {
+    score: (a, b) => potentialScore(b) - potentialScore(a),
+    popular: (a, b) => (b.stars || b.likes || 0) - (a.stars || a.likes || 0),
+    fresh: (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt),
+  };
+  state.results.sort(sorters[els.sort.value]);
+}
+
+function renderResults() {
+  els.searchGrid.innerHTML = state.results.length
+    ? state.results.map((project) => projectCard(project)).join('')
+    : '<div class="empty"><h3>没有找到结果</h3><p>系统已经尝试中文需求扩展；可以减少限制词或换一个用途描述。</p></div>';
+  bindProjectActions(els.searchGrid);
+}
+
+function init() {
+  renderCategories();
+  els.suggestions.innerHTML = suggestions.map((query) => `<button class="chip" data-query="${escapeHtml(query)}">${escapeHtml(query)}</button>`).join('');
+
+  document.querySelectorAll('.nav').forEach((button) => {
+    button.onclick = () => navigate(button.dataset.view);
+  });
+
+  els.categories.onclick = (event) => {
+    const button = event.target.closest('[data-category]');
+    if (!button) return;
+    state.category = button.dataset.category;
+    renderCategories();
+    renderRadar();
+    navigate('radar');
+  };
+
+  document.querySelectorAll('.tab').forEach((button) => {
+    button.onclick = () => {
+      document.querySelectorAll('.tab').forEach((tab) => tab.classList.remove('active'));
+      button.classList.add('active');
+      state.period = button.dataset.period;
+      renderRadar();
+    };
+  });
+
+  els.platform.onchange = renderRadar;
+  els.license.onchange = renderRadar;
+  els.useType.onchange = renderRadar;
+  els.refresh.onclick = () => radar(true);
+  els.menu.onclick = () => els.sidebar.classList.toggle('open');
+
+  els.quickSearch.onkeydown = (event) => {
+    if (event.key === 'Enter' && event.target.value.trim()) {
+      els.query.value = event.target.value.trim();
+      navigate('search');
+      searchProjects(els.query.value);
+    }
+  };
+
+  els.searchForm.onsubmit = (event) => {
+    event.preventDefault();
+    const query = els.query.value.trim();
+    query ? searchProjects(query) : toast('请输入搜索需求');
+  };
+
+  els.sort.onchange = () => {
+    sortSearchResults();
+    renderResults();
+  };
+
+  els.suggestions.onclick = (event) => {
+    const button = event.target.closest('[data-query]');
+    if (!button) return;
+    els.query.value = button.dataset.query;
+    searchProjects(button.dataset.query);
+  };
+
+  els.favoriteForm.onsubmit = (event) => {
+    event.preventDefault();
+    const project = findProject(els.projectId.value);
+    if (!project) return;
+    const item = normalizeProject({
+      ...project,
+      tags: els.tags.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean),
+      note: els.note.value.trim(),
+      action: els.action.value,
+      savedAt: favoriteById(project.id)?.savedAt || new Date().toISOString(),
+    });
+    state.favorites = [item, ...state.favorites.filter((favorite) => favorite.id !== project.id)];
+    persistFavorites();
+    els.dialog.close();
+    toast('已保存到收藏库');
+  };
+
+  els.closeDialog.onclick = els.cancel.onclick = () => els.dialog.close();
+  els.favoriteSearch.oninput = renderFavorites;
+  els.tagFilter.onchange = renderFavorites;
+
+  els.export.onclick = () => {
+    const blob = new Blob([JSON.stringify(state.favorites, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `openradar-favorites-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  els.clear.onclick = () => {
+    if (state.favorites.length && confirm('确定清空全部收藏吗？')) {
+      state.favorites = [];
+      persistFavorites();
+      toast('收藏已清空');
+    }
+  };
+
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    state.install = event;
+    els.install.hidden = false;
+  });
+
+  els.install.onclick = async () => {
+    if (!state.install) return;
+    state.install.prompt();
+    await state.install.userChoice;
+    state.install = null;
+    els.install.hidden = true;
+  };
+
+  updateCounters();
+  radar(false);
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
+init();

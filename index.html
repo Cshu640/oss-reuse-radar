@@ -1,11 +1,91 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#07101d"><meta name="description" content="跨平台开源项目发现、搜索与收藏雷达"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icons/icon.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css"><title>OpenRadar · 开源项目雷达</title></head>
-<body><div class="shell">
-<aside id="sidebar"><div class="brand"><b>OR</b><div><strong>OpenRadar</strong><small>开源项目雷达</small></div></div><nav><button class="nav active" data-view="radar">◉ 今日雷达</button><button class="nav" data-view="search">⌕ 灵感搜索</button><button class="nav" data-view="favorites">★ 我的收藏 <i id="favoriteCount">0</i></button><button class="nav" data-view="watch">◌ 观察名单</button></nav><p class="side-title">兴趣分类</p><div id="categories"></div><footer><span>● 免费 API 模式</span><small>GitHub · Hugging Face · 本地收藏</small></footer></aside>
-<main><header><button id="menu">☰</button><div class="quick"><span>⌕</span><input id="quickSearch" placeholder="你现在需要什么开源项目？"><kbd>Enter</kbd></div><button id="refresh">刷新雷达</button><button id="install" class="primary" hidden>安装到桌面</button></header>
-<section id="radarView" class="view active"><div class="hero"><div><em>OPEN-SOURCE INTELLIGENCE</em><h1>今天有哪些项目<br>值得立即关注？</h1><p>跨平台发现、潜力评分、许可证判断、收藏与后续接入建议。</p></div><div class="metrics"><div><b id="candidateMetric">—</b><span>本次候选</span></div><div><b id="freshMetric">—</b><span>30天内新项目</span></div><div><b id="savedMetric">0</b><span>已收藏</span></div></div></div>
-<div class="toolbar"><div class="tabs"><button class="tab active" data-period="today">今日潜力</button><button class="tab" data-period="week">7天热点</button><button class="tab" data-period="month">30天雷达</button><button class="tab" data-period="rising">低 Star 高潜力</button></div><div><select id="platform"><option value="all">全部平台</option><option value="github">GitHub</option><option value="huggingface">Hugging Face</option></select><select id="license"><option value="all">全部许可证</option><option value="commercial">优先可商用</option><option value="unknown">待核查</option></select></div></div><div class="section-title"><div><h2 id="radarTitle">今日潜力项目</h2><p id="radarDesc">代理潜力分不等于真实24小时涨幅；真实增长将在历史快照阶段实现。</p></div><span id="status">准备加载</span></div><div id="projectGrid" class="grid"></div></section>
-<section id="searchView" class="view"><div class="page-title"><em>INSPIRATION SEARCH</em><h1>有灵感，马上跨平台搜索</h1><p>输入自然语言需求，同时搜索 GitHub 与 Hugging Face。</p></div><form id="searchForm" class="search-box"><textarea id="query" placeholder="例如：寻找适合网页游戏、允许商用、TypeScript可接入的程序化地图生成器"></textarea><div><label><input id="useGitHub" type="checkbox" checked> GitHub</label><label><input id="useHF" type="checkbox" checked> Hugging Face</label><select id="sort"><option value="score">综合潜力</option><option value="popular">Star / Like</option><option value="fresh">最近更新</option></select><button class="primary">开始搜索</button></div></form><div id="suggestions" class="chips"></div><p id="searchSummary"></p><div id="searchGrid" class="grid"></div></section>
-<section id="favoritesView" class="view"><div class="page-title split"><div><em>PERSONAL LIBRARY</em><h1>我的收藏</h1><p>保存项目、添加标签与备注，记录下一步动作。</p></div><div><button id="export">导出 JSON</button><button id="clear" class="danger">清空收藏</button></div></div><div class="favorite-tools"><input id="favoriteSearch" placeholder="搜索项目、标签或备注"><select id="tagFilter"><option value="all">全部标签</option></select></div><div id="favoriteEmpty" class="empty" hidden><b>☆</b><h3>还没有收藏</h3><p>点击项目卡片右上角星标即可收藏。</p></div><div id="favoriteGrid" class="grid"></div></section>
-<section id="watchView" class="view"><div class="page-title"><em>NEXT PHASE</em><h1>观察名单与真实增长</h1><p>Phase 0.2 将保存历史快照，计算真正的24小时、7天与30天增速。</p></div><article class="roadmap"><h3>下一阶段</h3><ul><li>Supabase 项目库与历史快照</li><li>GitHub Actions 每6小时自动采集</li><li>真实 Star、Fork、下载增长曲线</li><li>收藏云同步和多设备访问</li><li>ecosyste.ms、GitLab、Codeberg 数据源</li></ul></article></section>
-</main></div>
-<dialog id="dialog"><form id="favoriteForm"><div class="dialog-head"><div><em>SAVE PROJECT</em><h2 id="dialogTitle">收藏项目</h2></div><button type="button" id="closeDialog">×</button></div><input id="projectId" type="hidden"><label>标签（逗号分隔）<input id="tags" placeholder="游戏AI, 立即测试, Codex"></label><label>备注<textarea id="note" placeholder="它能用在哪里？需要验证什么？"></textarea></label><label>下一步动作<select id="action"><option value="later">以后研究</option><option value="test">立即测试</option><option value="codex">交给 Codex 分析</option><option value="reference">只参考设计</option></select></label><div class="dialog-actions"><button type="button" id="cancel">取消</button><button class="primary">保存收藏</button></div></form></dialog><div id="toast"></div><script type="module" src="app.js"></script></body></html>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07101d">
+  <meta name="description" content="跨平台开源项目发现、搜索与收藏雷达">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <title>OpenRadar · 开源项目雷达</title>
+</head>
+<body>
+  <div class="shell">
+    <aside id="sidebar">
+      <div class="brand"><b>OR</b><div><strong>OpenRadar</strong><small>开源项目雷达</small></div></div>
+      <nav>
+        <button class="nav active" data-view="radar">◉ 今日雷达</button>
+        <button class="nav" data-view="search">⌕ 灵感搜索</button>
+        <button class="nav" data-view="favorites">★ 我的收藏 <i id="favoriteCount">0</i></button>
+        <button class="nav" data-view="watch">◌ 观察名单</button>
+      </nav>
+      <p class="side-title">兴趣分类</p>
+      <div id="categories"></div>
+      <footer><span>● 免费 API 模式</span><small>GitHub · Hugging Face · 本地收藏</small></footer>
+    </aside>
+
+    <main>
+      <header>
+        <button id="menu">☰</button>
+        <div class="quick"><span>⌕</span><input id="quickSearch" placeholder="你现在需要什么开源项目？"><kbd>Enter</kbd></div>
+        <button id="refresh">刷新雷达</button>
+        <button id="install" class="primary" hidden>安装到桌面</button>
+      </header>
+
+      <section id="radarView" class="view active">
+        <div class="hero">
+          <div><em>OPEN-SOURCE INTELLIGENCE</em><h1>今天有哪些项目<br>值得立即关注？</h1><p>跨平台发现、潜力评分、许可证判断、用途识别、收藏与后续接入建议。</p></div>
+          <div class="metrics"><div><b id="candidateMetric">—</b><span>本次候选</span></div><div><b id="freshMetric">—</b><span>30天内新项目</span></div><div><b id="savedMetric">0</b><span>已收藏</span></div></div>
+        </div>
+        <div class="toolbar">
+          <div class="tabs"><button class="tab active" data-period="today">今日潜力</button><button class="tab" data-period="week">7天热点</button><button class="tab" data-period="month">30天雷达</button><button class="tab" data-period="rising">低 Star 高潜力</button></div>
+          <div class="filters">
+            <select id="platform"><option value="all">全部平台</option><option value="github">GitHub</option><option value="huggingface">Hugging Face</option></select>
+            <select id="license"><option value="all">全部许可证</option><option value="commercial">优先可商用</option><option value="unknown">待核查</option></select>
+            <select id="useType"><option value="all">全部用途</option><option value="direct">直接安装使用</option><option value="selfhost">适合个人部署</option><option value="codex">Codex二次开发</option><option value="component">技术组件</option><option value="reference">模仿产品设计</option><option value="business">商业化机会</option></select>
+          </div>
+        </div>
+        <div class="section-title"><div><h2 id="radarTitle">今日潜力项目</h2><p id="radarDesc">代理潜力分不等于真实24小时涨幅；真实增长将在历史快照阶段实现。</p></div><span id="status">准备加载</span></div>
+        <div id="projectGrid" class="grid"></div>
+      </section>
+
+      <section id="searchView" class="view">
+        <div class="page-title"><em>INSPIRATION SEARCH</em><h1>有灵感，马上跨平台搜索</h1><p>输入中文自然语言需求，自动扩展为英文技术关键词，再搜索 GitHub 与 Hugging Face。</p></div>
+        <form id="searchForm" class="search-box">
+          <textarea id="query" placeholder="例如：寻找适合网页游戏、允许商用、TypeScript可接入的NPC长期记忆系统"></textarea>
+          <div><label><input id="useGitHub" type="checkbox" checked> GitHub</label><label><input id="useHF" type="checkbox" checked> Hugging Face</label><select id="sort"><option value="score">综合潜力</option><option value="popular">Star / Like</option><option value="fresh">最近更新</option></select><button class="primary">开始搜索</button></div>
+        </form>
+        <div id="suggestions" class="chips"></div>
+        <p id="searchSummary"></p>
+        <div id="searchGrid" class="grid"></div>
+      </section>
+
+      <section id="favoritesView" class="view">
+        <div class="page-title split"><div><em>PERSONAL LIBRARY</em><h1>我的收藏</h1><p>保存项目、添加标签与备注，记录下一步动作。</p></div><div><button id="export">导出 JSON</button><button id="clear" class="danger">清空收藏</button></div></div>
+        <div class="favorite-tools"><input id="favoriteSearch" placeholder="搜索项目、分类、用途、标签或备注"><select id="tagFilter"><option value="all">全部标签</option></select></div>
+        <div id="favoriteEmpty" class="empty" hidden><b>☆</b><h3>还没有收藏</h3><p>点击项目卡片右上角星标即可收藏。</p></div>
+        <div id="favoriteGrid" class="grid"></div>
+      </section>
+
+      <section id="watchView" class="view">
+        <div class="page-title"><em>NEXT PHASE</em><h1>观察名单与真实增长</h1><p>下一阶段将保存历史快照，计算真正的24小时、7天与30天增速。</p></div>
+        <article class="roadmap"><h3>后续路线</h3><ul><li>Supabase 项目库与历史快照</li><li>GitHub Actions 每6小时自动采集</li><li>真实 Star、Fork、下载增长曲线</li><li>收藏云同步和多设备访问</li><li>ecosyste.ms、GitLab、Codeberg 数据源</li></ul></article>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="dialog">
+    <form id="favoriteForm">
+      <div class="dialog-head"><div><em>SAVE PROJECT</em><h2 id="dialogTitle">收藏项目</h2></div><button type="button" id="closeDialog">×</button></div>
+      <input id="projectId" type="hidden">
+      <label>标签（逗号分隔）<input id="tags" placeholder="办公工具, 立即测试, Codex"></label>
+      <label>备注<textarea id="note" placeholder="它能用在哪里？需要验证什么？"></textarea></label>
+      <label>下一步动作<select id="action"><option value="later">以后研究</option><option value="test">立即测试</option><option value="codex">交给 Codex 分析</option><option value="reference">只参考设计</option></select></label>
+      <div class="dialog-actions"><button type="button" id="cancel">取消</button><button class="primary">保存收藏</button></div>
+    </form>
+  </dialog>
+  <div id="toast"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

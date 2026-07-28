@@ -7,3 +7,7 @@
 # Local runtime history snapshots
 data/*.json
 data/*.tmp
+
+# Generated Codex research packets
+exports/codex/*
+!exports/codex/.gitkeep

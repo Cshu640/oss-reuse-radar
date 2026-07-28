@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createGiteeSearchService, createOpenRadarServer, parseGiteeSearchHtml } from '../server.mjs';
 import { HistoryStore } from '../history-store.mjs';
+import { createCodexExportService } from '../codex-export-service.mjs';
 
 const fixture = `<!doctype html><html><body>
 <article class="repo-card">
@@ -101,10 +102,16 @@ const insightService = {
   generate: async (project, options) => ({ projectId: project.id, source: 'ollama', summary: '新生成中文解读', force: Boolean(options.force) }),
 };
 
+const codexExportService = createCodexExportService({
+  rootDir: historyRoot,
+  now: () => new Date('2026-07-29T03:04:05.000Z'),
+});
+
 const server = createOpenRadarServer({
   historyStore,
   historyCollector,
   insightService,
+  codexExportService,
   giteeSearch: async (query, limit) => ({
     projects: [{ full_name: 'mock/project', name: 'project', owner: { login: 'mock' }, html_url: 'https://gitee.com/mock/project' }],
     source: 'mock',
@@ -120,7 +127,39 @@ const health = await fetch(`${base}/api/health`).then((response) => response.jso
 assert.equal(health.giteeProxy, true);
 assert.equal(health.history, true);
 assert.equal(health.insights, true);
-assert.equal(health.version, '0.3-B');
+assert.equal(health.codexExport, true);
+assert.equal(health.version, '0.3-C');
+
+const codexStatus = await fetch(`${base}/api/codex/status`).then((response) => response.json());
+assert.equal(codexStatus.enabled, true);
+assert.equal(codexStatus.autoLaunch, false);
+const codexExport = await fetch(`${base}/api/codex/export`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    project: {
+      id: 'github:mock/project',
+      entityId: 'entity:mock-project',
+      aliases: ['github:mock/project', 'huggingface:mock/project'],
+      platform: 'github',
+      owner: 'mock',
+      name: 'project',
+      url: 'https://github.com/mock/project',
+      sourceCount: 2,
+      sourceProjects: [
+        { id: 'github:mock/project', platform: 'github', owner: 'mock', name: 'project', url: 'https://github.com/mock/project', license: 'MIT' },
+        { id: 'huggingface:mock/project', platform: 'huggingface', owner: 'mock', name: 'project', url: 'https://huggingface.co/mock/project', license: 'MIT' },
+      ],
+    },
+    insight: { source: 'ollama', summary: '中文项目摘要', risks: ['需核查依赖'] },
+  }),
+}).then((response) => response.json());
+assert.equal(codexExport.ok, true);
+assert.equal(codexExport.autoLaunch, false);
+assert.equal(codexExport.files.length, 2);
+assert.match(codexExport.task, /只研究，不集成/);
+assert.match(codexExport.folder, /^exports\/codex\//);
+
 const proxied = await fetch(`${base}/api/gitee/search?q=AI&limit=3`).then((response) => response.json());
 assert.equal(proxied.projects.length, 1);
 assert.equal(proxied.query, 'AI');
@@ -159,4 +198,4 @@ server.close();
 await once(server, 'close');
 await rm(historyRoot, { recursive: true, force: true });
 
-console.log(JSON.stringify({ parsed: parsed.length, fallbackSource: fallback.source, exploreSource: explore.source, stopLossSource: stopLoss.source, health, proxied: proxied.projects.length, historyProjects: historyStatus.projectCount, insightModel: insightStatus.model }, null, 2));
+console.log(JSON.stringify({ parsed: parsed.length, fallbackSource: fallback.source, exploreSource: explore.source, stopLossSource: stopLoss.source, health, codexFolder: codexExport.folder, proxied: proxied.projects.length, historyProjects: historyStatus.projectCount, insightModel: insightStatus.model }, null, 2));

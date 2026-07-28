@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { HistoryStore } from './history-store.mjs';
 import { InsightStore } from './insight-store.mjs';
 import { createInsightService } from './insight-service.mjs';
+import { createCodexExportService } from './codex-export-service.mjs';
 import { platformIds, radarPlatform } from './platform-adapters.js';
 
 const ROOT_DIR = fileURLToPath(new URL('.', import.meta.url));
@@ -397,12 +398,12 @@ async function serveStatic(req, res, rootDir) {
   }
 }
 
-export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = createGiteeSearchService(), historyStore = null, historyCollector = null, insightService = null } = {}) {
+export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = createGiteeSearchService(), historyStore = null, historyCollector = null, insightService = null, codexExportService = null } = {}) {
   return createServer(async (req, res) => {
     try {
       const requestUrl = new URL(req.url || '/', 'http://localhost');
       if (req.method === 'GET' && requestUrl.pathname === '/api/health') {
-        json(res, 200, { status: 'ok', version: '0.3-B', giteeProxy: true, giteeMode: 'bounded-fallback', history: Boolean(historyStore), historyCollector: historyCollector?.getState?.() || null, insights: Boolean(insightService) });
+        json(res, 200, { status: 'ok', version: '0.3-C', giteeProxy: true, giteeMode: 'bounded-fallback', history: Boolean(historyStore), historyCollector: historyCollector?.getState?.() || null, insights: Boolean(insightService), codexExport: Boolean(codexExportService) });
         return;
       }
       if (req.method === 'GET' && requestUrl.pathname === '/api/history/status') {
@@ -475,6 +476,29 @@ export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = create
         }
         return;
       }
+      if (req.method === 'GET' && requestUrl.pathname === '/api/codex/status') {
+        if (!codexExportService) {
+          json(res, 503, { enabled: false, error: 'Codex export service is not configured' });
+          return;
+        }
+        json(res, 200, codexExportService.status());
+        return;
+      }
+      if (req.method === 'POST' && requestUrl.pathname === '/api/codex/export') {
+        if (!codexExportService) {
+          json(res, 503, { error: 'Codex export service is not configured' });
+          return;
+        }
+        try {
+          const body = await readJsonBody(req, 1_500_000);
+          const result = await codexExportService.exportProject(body.project, body.insight || null);
+          console.log(`[Codex] project=${JSON.stringify(body.project?.entityId || body.project?.id || '')} folder=${JSON.stringify(result.folder)}`);
+          json(res, 200, result);
+        } catch (error) {
+          json(res, 400, { error: error?.message || 'Codex research packet export failed' });
+        }
+        return;
+      }
       if (req.method === 'GET' && requestUrl.pathname === '/api/gitee/search') {
         const query = requestUrl.searchParams.get('q') || '';
         const limit = requestUrl.searchParams.get('limit') || 20;
@@ -508,7 +532,8 @@ if (entryPath && pathToFileURL(entryPath).href === import.meta.url) {
     const insightStore = new InsightStore(resolve(ROOT_DIR, 'data/insights.json'));
     await insightStore.init();
     const insightService = createInsightService({ store: insightStore });
-    const server = createOpenRadarServer({ historyStore, historyCollector, insightService });
+    const codexExportService = createCodexExportService({ rootDir: ROOT_DIR });
+    const server = createOpenRadarServer({ historyStore, historyCollector, insightService, codexExportService });
     server.on('error', (error) => {
       console.error('');
       if (error?.code === 'EADDRINUSE') {
@@ -522,11 +547,13 @@ if (entryPath && pathToFileURL(entryPath).href === import.meta.url) {
     });
     server.listen(DEFAULT_PORT, '127.0.0.1', () => {
       console.log('');
-      console.log('  OpenRadar Phase 0.3-B');
+      console.log('  OpenRadar Phase 0.3-C');
       console.log(`  Local: http://localhost:${DEFAULT_PORT}`);
       console.log('  Gitee: 有止损兼容通道（v5 → 官方搜索 → 首页探索 → 外部搜索）');
       console.log('  History: 本地快照已启用（启动即采集，之后每6小时采集五个平台）');
       console.log('  Insights: 本地Ollama中文解读已启用（默认模型 qwen3:4b，按需生成并缓存）');
+      console.log('  Identity: 跨平台保守去重与统一项目详情已启用');
+      console.log('  Codex: 本地研究包导出已启用（不会自动启动Codex或消耗额度）');
       console.log('  按 Ctrl + C 停止服务器。');
       console.log('');
       if (process.env.OPENRADAR_AUTO_COLLECT !== '0') {

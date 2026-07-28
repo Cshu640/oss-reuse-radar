@@ -1,7 +1,9 @@
 import { platformCatalog, platformIds, radarPlatform, searchPlatform } from './platform-adapters.js';
+import { deduplicationStats, entitiesOverlap, entityLookupIds, findEntityById, mergeProjectEntities, projectSources } from './project-identity.js';
+import { buildCodexResearchTask, codexExportSlug } from './codex-packet.js';
 
 const FAVORITES_KEY = 'openradar:favorites:v1';
-const RADAR_CACHE_KEY = 'openradar:radar-cache:v7';
+const RADAR_CACHE_KEY = 'openradar:radar-cache:v8';
 const HISTORY_PERIOD_MAP = { today: 'day', week: 'week', month: 'month' };
 const HISTORY_TARGET_HOURS = { day: 24, week: 168, month: 720 };
 const HISTORY_COPY = {
@@ -154,7 +156,9 @@ const seed = [
 ];
 
 const state = {
-  projects: seed.map(normalizeProject),
+  rawProjects: seed.map(normalizeProject),
+  projects: mergeProjectEntities(seed.map(normalizeProject)).map(normalizeProject),
+  rawResults: [],
   results: [],
   favorites: loadFavorites().map(normalizeProject),
   category: '全部',
@@ -171,6 +175,9 @@ const state = {
   insightServiceAvailable: false,
   insightAvailable: false,
   activeInsightId: '',
+  activeDetailId: '',
+  codexExportAvailable: false,
+  codexTask: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -289,9 +296,25 @@ function inferUseTypes(project) {
 function normalizeProject(project) {
   const normalized = { ...project };
   normalized.topics = Array.isArray(normalized.topics) ? normalized.topics : [];
+  normalized.aliases = Array.isArray(normalized.aliases) ? [...new Set(normalized.aliases.filter(Boolean))] : [normalized.id].filter(Boolean);
+  normalized.sourceProjects = Array.isArray(normalized.sourceProjects)
+    ? normalized.sourceProjects.map((source) => ({ ...source, topics: Array.isArray(source.topics) ? source.topics : [], sourceProjects: undefined }))
+    : undefined;
+  normalized.sourcePlatforms = Array.isArray(normalized.sourcePlatforms)
+    ? [...new Set(normalized.sourcePlatforms.filter(Boolean))]
+    : [normalized.platform].filter(Boolean);
+  normalized.sourceCount = Number(normalized.sourceCount || normalized.sourceProjects?.length || 1);
   normalized.category = normalized.category || classifyCategory(normalized);
   normalized.useTypes = inferUseTypes(normalized);
   return normalized;
+}
+
+function projectKey(project) {
+  return project?.entityId || project?.id || '';
+}
+
+function entitySources(project) {
+  return projectSources(project).map(normalizeProject);
 }
 
 function platformMeta(projectOrId) {
@@ -311,26 +334,51 @@ function metricValue(project, field) {
 
 function growthPeriod(project, periodId = HISTORY_PERIOD_MAP[state.period]) {
   if (!periodId) return null;
-  return state.growth[project.id]?.periods?.[periodId] || null;
+  const candidates = entitySources(project).map((source) => ({
+    sourceProject: source,
+    period: state.growth[source.id]?.periods?.[periodId] || null,
+  })).filter((candidate) => candidate.period);
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => {
+    if (Boolean(b.period.ready) !== Boolean(a.period.ready)) return Number(b.period.ready) - Number(a.period.ready);
+    if (b.period.ready && a.period.ready) {
+      const bMeta = platformMeta(b.sourceProject);
+      const aMeta = platformMeta(a.sourceProject);
+      const bDelta = Number(b.period.deltas?.[bMeta.primaryField] || 0);
+      const aDelta = Number(a.period.deltas?.[aMeta.primaryField] || 0);
+      if (bDelta !== aDelta) return bDelta - aDelta;
+    }
+    return Number(b.period.coveredHours || 0) - Number(a.period.coveredHours || 0);
+  });
+  return { ...candidates[0].period, sourceProject: candidates[0].sourceProject };
 }
 
 function growthDelta(project, periodId = HISTORY_PERIOD_MAP[state.period]) {
   const period = growthPeriod(project, periodId);
-  const meta = platformMeta(project);
+  const meta = platformMeta(period?.sourceProject || project);
   return period?.ready ? Number(period.deltas?.[meta.primaryField] || 0) : null;
 }
 
-function growthPercentile(project, periodId) {
-  const delta = growthDelta(project, periodId);
-  if (delta === null) return null;
-  const peers = state.projects
-    .filter((candidate) => candidate.platform === project.platform)
-    .map((candidate) => growthDelta(candidate, periodId))
+function sourceGrowthPercentile(source, periodId) {
+  const period = state.growth[source.id]?.periods?.[periodId];
+  if (!period?.ready) return null;
+  const meta = platformMeta(source);
+  const delta = Number(period.deltas?.[meta.primaryField] || 0);
+  const peers = state.rawProjects
+    .filter((candidate) => candidate.platform === source.platform)
+    .map((candidate) => {
+      const peerPeriod = state.growth[candidate.id]?.periods?.[periodId];
+      return peerPeriod?.ready ? Number(peerPeriod.deltas?.[platformMeta(candidate).primaryField] || 0) : null;
+    })
     .filter((value) => value !== null)
     .sort((a, b) => a - b);
   if (!peers.length) return 0;
-  const belowOrEqual = peers.filter((value) => value <= delta).length;
-  return belowOrEqual / peers.length;
+  return peers.filter((value) => value <= delta).length / peers.length;
+}
+
+function growthPercentile(project, periodId) {
+  const values = entitySources(project).map((source) => sourceGrowthPercentile(source, periodId)).filter((value) => value !== null);
+  return values.length ? Math.max(...values) : null;
 }
 
 function formatDurationHours(hours = 0) {
@@ -343,15 +391,15 @@ function growthBadge(project) {
   const periodId = HISTORY_PERIOD_MAP[state.period];
   if (!periodId) return '';
   if (!state.historyAvailable) return '<div class="growth-line pending"><b>历史未启用</b><span>请使用本地服务器启动</span></div>';
-  if (!state.growth[project.id]) return '<div class="growth-line pending"><b>尚未追踪</b><span>进入候选池后开始积累</span></div>';
   const period = growthPeriod(project, periodId);
-  const meta = platformMeta(project);
+  if (!period) return '<div class="growth-line pending"><b>尚未追踪</b><span>任一来源进入候选池后开始积累</span></div>';
+  const meta = platformMeta(period.sourceProject || project);
   const targetHours = HISTORY_TARGET_HOURS[periodId];
   if (period?.ready) {
     const delta = Number(period.deltas?.[meta.primaryField] || 0);
     const sign = delta > 0 ? '+' : '';
     const tone = delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral';
-    return `<div class="growth-line ${tone}"><b>${sign}${formatNumber(delta)}</b><span>${escapeHtml(meta.primaryLabel)} · 实际覆盖${escapeHtml(formatDurationHours(period.coveredHours))}</span></div>`;
+    return `<div class="growth-line ${tone}"><b>${sign}${formatNumber(delta)}</b><span>${escapeHtml(platformMeta(period.sourceProject || project).shortLabel)} ${escapeHtml(meta.primaryLabel)} · 实际覆盖${escapeHtml(formatDurationHours(period.coveredHours))}</span></div>`;
   }
   const covered = Math.min(targetHours, Math.max(0, period?.coveredHours || state.historyStatus?.historyAgeHours || 0));
   return `<div class="growth-line pending"><b>积累中</b><span>${escapeHtml(formatDurationHours(covered))} / ${escapeHtml(formatDurationHours(targetHours))}</span></div>`;
@@ -391,7 +439,10 @@ function rulePlainSummary(project) {
 }
 
 function projectInsight(project) {
-  return state.insights[project.id] || null;
+  for (const id of entityLookupIds(project)) {
+    if (state.insights[id]) return state.insights[id];
+  }
+  return null;
 }
 
 function insightSourceLabel(insight) {
@@ -400,14 +451,26 @@ function insightSourceLabel(insight) {
   return '规则摘要';
 }
 
+function findLiveEntity(id) {
+  return findEntityById([...state.projects, ...state.results], id);
+}
+
+function favoriteForProject(project) {
+  return state.favorites.find((item) => entitiesOverlap(item, project)) || null;
+}
+
 function favoriteById(id) {
-  return state.favorites.find((item) => item.id === id);
+  const entity = findLiveEntity(id);
+  if (entity) return favoriteForProject(entity);
+  return state.favorites.find((item) => entityLookupIds(item).includes(id)) || null;
 }
 
 function findProject(id) {
-  return state.projects.find((item) => item.id === id)
-    || state.results.find((item) => item.id === id)
-    || favoriteById(id);
+  return findLiveEntity(id)
+    || findEntityById(state.favorites, id)
+    || state.rawProjects.find((item) => item.id === id)
+    || state.rawResults.find((item) => item.id === id)
+    || null;
 }
 
 function toast(message) {
@@ -417,8 +480,18 @@ function toast(message) {
   toast.timer = setTimeout(() => els.toast.classList.remove('show'), 2200);
 }
 
+function sourceBadgeRow(project) {
+  const sources = entitySources(project);
+  return sources.map((source, index) => {
+    const meta = platformMeta(source);
+    const primary = metricValue(source, meta.primaryField);
+    return `<span class="source-mini ${index === 0 ? 'primary' : ''}" title="${escapeHtml(`${source.owner}/${source.name} · ${meta.primaryLabel} ${formatNumber(primary)}`)}">${escapeHtml(meta.shortLabel)}</span>`;
+  }).join('');
+}
+
 function projectCard(project, saved = false, showGrowth = false) {
-  const favorite = favoriteById(project.id);
+  const favorite = favoriteForProject(project);
+  const key = projectKey(project);
   const meta = platformMeta(project);
   const popularity = metricValue(project, meta.primaryField);
   const secondary = metricValue(project, meta.secondaryField);
@@ -439,13 +512,15 @@ function projectCard(project, saved = false, showGrowth = false) {
   const insight = projectInsight(project);
   const plainSummary = insight?.summary || rulePlainSummary(project);
   const insightLabel = insightSourceLabel(insight);
+  const mergedBadge = project.sourceCount > 1 ? `<span class="badge merged">已合并 ${project.sourceCount} 个来源</span>` : '';
 
   return `<article class="card">
     <div class="card-top">
       ${avatar}
-      <div class="title"><h3 title="${escapeHtml(`${project.owner}/${project.name}`)}">${escapeHtml(project.name)}</h3><p>${escapeHtml(project.owner)} · 更新于${timeAgo(project.updatedAt)}</p></div>
-      <button class="star ${favorite ? 'saved' : ''}" data-favorite="${escapeHtml(project.id)}" aria-label="收藏项目">${favorite ? '★' : '☆'}</button>
+      <div class="title"><button class="title-link" data-detail="${escapeHtml(key)}" title="查看 ${escapeHtml(`${project.owner}/${project.name}`)} 详情">${escapeHtml(project.name)}</button><p>${escapeHtml(project.owner)} · 更新于${timeAgo(project.updatedAt)}</p></div>
+      <button class="star ${favorite ? 'saved' : ''}" data-favorite="${escapeHtml(key)}" aria-label="收藏项目">${favorite ? '★' : '☆'}</button>
     </div>
+    <div class="source-row">${sourceBadgeRow(project)}${mergedBadge}</div>
     <p class="desc">${escapeHtml(project.description || '暂无描述，需要进一步读取项目文档。')}</p>
     <div class="plain-summary ${insight?.source === 'ollama' ? 'ai' : 'rule'}"><span>${escapeHtml(insightLabel)}</span><p>${escapeHtml(plainSummary)}</p></div>
     <div class="badges">
@@ -464,11 +539,17 @@ function projectCard(project, saved = false, showGrowth = false) {
       <div class="score" style="--score:${potentialScore(project)}">${potentialScore(project)}</div>
     </div>
     <div class="actions">
-      <a href="${escapeHtml(project.url)}" target="_blank" rel="noopener">打开项目</a>
-      <button data-analyze="${escapeHtml(project.id)}">中文解读</button>
-      ${saved ? `<button data-remove="${escapeHtml(project.id)}">移出收藏</button>` : ''}
+      <button data-detail="${escapeHtml(key)}">查看详情</button>
+      <button data-analyze="${escapeHtml(key)}">中文解读</button>
+      <a href="${escapeHtml(project.url)}" target="_blank" rel="noopener">打开主源</a>
+      ${saved ? `<button data-remove="${escapeHtml(key)}">移出收藏</button>` : ''}
     </div>
   </article>`;
+}
+
+function removeFavoriteProject(project) {
+  state.favorites = state.favorites.filter((item) => !entitiesOverlap(item, project));
+  persistFavorites();
 }
 
 function bindProjectActions(root) {
@@ -477,14 +558,185 @@ function bindProjectActions(root) {
   });
   root.querySelectorAll('[data-remove]').forEach((button) => {
     button.onclick = () => {
-      state.favorites = state.favorites.filter((item) => item.id !== button.dataset.remove);
-      persistFavorites();
+      const project = findProject(button.dataset.remove);
+      if (!project) return;
+      removeFavoriteProject(project);
       toast('已移出收藏');
     };
   });
   root.querySelectorAll('[data-analyze]').forEach((button) => {
     button.onclick = () => openInsightDialog(button.dataset.analyze);
   });
+  root.querySelectorAll('[data-detail]').forEach((button) => {
+    button.onclick = () => openProjectDetail(button.dataset.detail);
+  });
+}
+
+
+function detailSourceCard(source, primaryId) {
+  const meta = platformMeta(source);
+  const primary = metricValue(source, meta.primaryField);
+  const secondary = metricValue(source, meta.secondaryField);
+  const period = growthPeriod(source);
+  const growth = period?.ready
+    ? `${Number(period.deltas?.[meta.primaryField] || 0) >= 0 ? '+' : ''}${formatNumber(Number(period.deltas?.[meta.primaryField] || 0))} ${meta.primaryLabel}`
+    : period ? `积累中 · ${formatDurationHours(period.coveredHours || 0)}` : '尚未追踪';
+  return `<article class="detail-source-card ${source.id === primaryId ? 'primary' : ''}">
+    <div class="split"><div><span class="badge platform">${escapeHtml(meta.label)}</span>${source.id === primaryId ? '<span class="badge good">主来源</span>' : ''}</div><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener">打开来源 ↗</a></div>
+    <h3>${escapeHtml(source.owner || '未知作者')}/${escapeHtml(source.name)}</h3>
+    <p>${escapeHtml(source.description || '暂无公开描述。')}</p>
+    <div class="detail-source-metrics"><span><b>${formatNumber(primary)}</b>${escapeHtml(meta.primaryLabel)}</span><span><b>${formatNumber(secondary)}</b>${escapeHtml(meta.secondaryLabel)}</span><span><b>${escapeHtml(growth)}</b>${escapeHtml(HISTORY_COPY[state.period]?.[0] || '增长')}</span></div>
+    <div class="badges">${source.language ? `<span class="badge">${escapeHtml(source.language)}</span>` : ''}<span class="badge ${commercialFriendly(source.license) ? 'good' : 'warn'}">${escapeHtml(source.license || '许可证待核查')}</span><span class="badge">更新于${escapeHtml(timeAgo(source.updatedAt))}</span></div>
+  </article>`;
+}
+
+function detailInsightSections(project, insight) {
+  const value = insight || {
+    summary: rulePlainSummary(project),
+    whatItDoes: project.description || '需要阅读README进一步确认。',
+    useMode: inferUseTypes(project).map((type) => useTypeLabels[type] || type).join('；'),
+    commercial: `${project.license || '许可证待核查'}；正式采用前必须核对许可证原文和第三方依赖。`,
+    requirements: `${project.language ? `主要技术：${project.language}。` : ''}安装和硬件要求待核查。`,
+    codexValue: '适合先交给Codex做目录、依赖、许可证和接入成本审计。',
+    fitForUser: '需结合用户当前项目、Windows设备和8GB显存条件进一步判断。',
+    risks: ['当前仅有规则摘要，尚未完成上游代码审计。'],
+    recommendation: '先收藏并研究，不直接集成。',
+  };
+  const risks = Array.isArray(value.risks) ? value.risks : [];
+  return `<div class="detail-insight-summary"><span>${escapeHtml(insightSourceLabel(insight))}</span><strong>${escapeHtml(value.summary || rulePlainSummary(project))}</strong></div>
+    <div class="detail-insight-grid">
+      ${insightSection('它实际做什么', value.whatItDoes)}
+      ${insightSection('怎么使用或接入', value.useMode)}
+      ${insightSection('许可证与商用', value.commercial)}
+      ${insightSection('运行门槛', value.requirements)}
+      ${insightSection('交给Codex的价值', value.codexValue)}
+      ${insightSection('对你的适配度', value.fitForUser)}
+      ${risks.length ? `<section><h3>主要风险</h3><ul>${risks.map((risk) => `<li>${escapeHtml(risk)}</li>`).join('')}</ul></section>` : ''}
+      ${insightSection('当前建议', value.recommendation)}
+    </div>`;
+}
+
+function copyText(value) {
+  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(value);
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  textarea.remove();
+  return Promise.resolve();
+}
+
+function downloadText(value, filename, type = 'text/markdown') {
+  const blob = new Blob([value], { type: `${type};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+async function prepareCodexResearch(project) {
+  const key = projectKey(project);
+  const button = els.detailContent.querySelector('[data-codex]');
+  if (button) {
+    button.disabled = true;
+    button.textContent = '正在准备研究包…';
+  }
+  const insight = projectInsight(project);
+  let packet;
+  try {
+    if (!state.codexExportAvailable) throw new Error('本地导出服务未启用');
+    packet = await fetchJsonSafe('/api/codex/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project: { ...project, plainSummary: rulePlainSummary(project) }, insight }),
+    });
+  } catch (error) {
+    packet = {
+      ok: true,
+      task: buildCodexResearchTask({ ...project, plainSummary: rulePlainSummary(project) }, insight),
+      folder: '',
+      files: [],
+      autoLaunch: false,
+      message: `本地文件导出不可用，已在浏览器生成研究提示词：${readableError(error)}`,
+    };
+  }
+  state.codexTask = { ...packet, projectKey: key, filename: `${codexExportSlug(project)}-codex-research.md` };
+  try {
+    await copyText(packet.task);
+    state.codexTask.copied = true;
+  } catch {
+    state.codexTask.copied = false;
+  }
+  renderDetail();
+  toast(packet.folder ? 'Codex研究包已生成并复制' : 'Codex研究提示词已复制');
+}
+
+function renderDetail() {
+  if (!els.detailContent) return;
+  const project = findProject(state.activeDetailId);
+  if (!project) {
+    els.detailContent.innerHTML = '<div class="empty"><h3>项目详情尚未加载</h3><p>请返回雷达刷新数据后再打开。</p></div>';
+    return;
+  }
+  const favorite = favoriteForProject(project);
+  const insight = projectInsight(project);
+  const sources = entitySources(project);
+  const packet = state.codexTask?.projectKey === projectKey(project) ? state.codexTask : null;
+  const licenseVariants = [...new Set(sources.map((source) => source.license).filter(Boolean))];
+  const languages = [...new Set(sources.map((source) => source.language).filter(Boolean))];
+  const topics = [...new Set(sources.flatMap((source) => source.topics || []))].slice(0, 18);
+  const useBadges = inferUseTypes(project).map((type) => `<span class="badge use-type">${escapeHtml(useTypeLabels[type] || type)}</span>`).join('');
+  const packetResult = packet ? `<div class="codex-result ${packet.folder ? 'success' : 'warn'}"><b>${packet.folder ? '研究包已写入本地' : '研究提示词已准备'}</b><p>${escapeHtml(packet.message || '')}</p>${packet.folder ? `<code>${escapeHtml(packet.folder)}</code>` : ''}<div class="actions"><button data-copy-codex>再次复制</button><button data-download-codex>下载 Markdown</button></div></div>` : '';
+
+  els.detailContent.innerHTML = `<div class="detail-back-row"><button id="detailBack">← 返回</button><button data-share-detail>复制详情链接</button></div>
+    <article class="detail-hero">
+      <div><em>UNIFIED OPEN-SOURCE PROFILE</em><div class="detail-title-row"><h1>${escapeHtml(project.name)}</h1><button class="star ${favorite ? 'saved' : ''}" data-favorite="${escapeHtml(projectKey(project))}">${favorite ? '★' : '☆'}</button></div><p>${escapeHtml(project.owner || '未知作者')} · ${project.sourceCount || 1} 个平台来源 · 更新于${escapeHtml(timeAgo(project.updatedAt))}</p></div>
+      <div class="detail-score"><span>综合潜力</span><b>${potentialScore(project)}</b></div>
+    </article>
+    <div class="detail-badges"><span class="badge">${escapeHtml(project.category || classifyCategory(project))}</span>${useBadges}${languages.map((language) => `<span class="badge">${escapeHtml(language)}</span>`).join('')}${licenseVariants.map((license) => `<span class="badge ${commercialFriendly(license) ? 'good' : 'warn'}">${escapeHtml(license)}</span>`).join('')}</div>
+    ${topics.length ? `<div class="detail-topics">${topics.map((topic) => `<span>${escapeHtml(topic)}</span>`).join('')}</div>` : ''}
+    <section class="detail-section"><div class="section-title"><div><h2>统一中文情报</h2><p>同一项目的多平台来源合并后，只保留一张完整情报卡。</p></div><button data-analyze="${escapeHtml(projectKey(project))}">${insight ? '查看/更新中文解读' : '生成中文解读'}</button></div>${detailInsightSections(project, insight)}</section>
+    <section class="detail-section"><div class="section-title"><div><h2>跨平台来源</h2><p>${sources.length > 1 ? `已通过${escapeHtml((project.dedupReasons || []).join('、') || '身份信号')}合并${sources.length}条来源；采用前仍需让Codex核验是否真为同一项目。` : '当前只发现一个来源。'}</p></div><span>${sources.length} SOURCES</span></div><div class="detail-source-grid">${sources.map((source) => detailSourceCard(source, project.id)).join('')}</div></section>
+    <section class="detail-section codex-panel"><div><em>CODEX RESEARCH PACKET</em><h2>一键交给 Codex 研究</h2><p>生成一份包含所有平台来源、中文解读、许可证核查、维护健康、安全风险、替代方案和强制交接格式的研究任务。当前版本不会自动启动Codex，也不会在你不知情时消耗额度。</p></div><button class="primary codex-button" data-codex>生成并复制研究任务</button>${packetResult}</section>`;
+
+  els.detailContent.querySelector('#detailBack').onclick = () => {
+    if (location.hash.startsWith('#project=')) history.back();
+    else navigate('radar');
+  };
+  els.detailContent.querySelector('[data-favorite]').onclick = () => openFavoriteDialog(projectKey(project));
+  els.detailContent.querySelector('[data-analyze]').onclick = () => openInsightDialog(projectKey(project));
+  els.detailContent.querySelector('[data-codex]').onclick = () => void prepareCodexResearch(project);
+  els.detailContent.querySelector('[data-share-detail]').onclick = async () => {
+    await copyText(location.href);
+    toast('详情链接已复制');
+  };
+  els.detailContent.querySelector('[data-copy-codex]')?.addEventListener('click', async () => {
+    await copyText(packet.task);
+    toast('Codex研究任务已复制');
+  });
+  els.detailContent.querySelector('[data-download-codex]')?.addEventListener('click', () => downloadText(packet.task, packet.filename));
+}
+
+function openProjectDetail(id, pushHash = true) {
+  const project = findProject(id);
+  if (!project) return;
+  state.activeDetailId = projectKey(project);
+  if (pushHash) location.hash = `project=${encodeURIComponent(state.activeDetailId)}`;
+  navigate('detail');
+}
+
+function openHashProject() {
+  if (!location.hash.startsWith('#project=')) return false;
+  const id = decodeURIComponent(location.hash.slice('#project='.length));
+  const project = findProject(id);
+  if (!project) return false;
+  openProjectDetail(id, false);
+  return true;
 }
 
 function renderCategories() {
@@ -496,7 +748,7 @@ function renderCategories() {
 function filteredProjects() {
   let projects = [...state.projects];
   if (state.category !== '全部') projects = projects.filter((project) => (project.category || classifyCategory(project)) === state.category);
-  if (els.platform.value !== 'all') projects = projects.filter((project) => project.platform === els.platform.value);
+  if (els.platform.value !== 'all') projects = projects.filter((project) => entitySources(project).some((source) => source.platform === els.platform.value));
   if (els.license.value === 'commercial') projects = projects.filter((project) => commercialFriendly(project.license));
   if (els.license.value === 'unknown') projects = projects.filter((project) => !project.license || /待核查|unknown|other/i.test(project.license));
   if (els.useType.value !== 'all') projects = projects.filter((project) => inferUseTypes(project).includes(els.useType.value));
@@ -536,7 +788,9 @@ function renderRadar() {
   els.projectGrid.innerHTML = projects.length
     ? projects.map((project) => projectCard(project, false, true)).join('')
     : '<div class="empty"><h3>没有符合条件的项目</h3><p>可以切换分类、用途或许可证筛选。</p></div>';
-  els.candidateMetric.textContent = state.projects.length;
+  const stats = deduplicationStats(state.rawProjects, state.projects);
+  els.candidateMetric.textContent = stats.entityCount;
+  els.mergedMetric.textContent = stats.mergedSourceCount;
   els.freshMetric.textContent = state.projects.filter((project) => projectAgeDays(project) <= 30).length;
   bindProjectActions(els.projectGrid);
 }
@@ -564,21 +818,25 @@ function updateCounters() {
   renderFavorites();
   renderRadar();
   if (state.results.length) renderResults();
+  if (state.activeDetailId) renderDetail();
 }
 
 function navigate(view) {
   document.querySelectorAll('.view,.nav').forEach((node) => node.classList.remove('active'));
-  $(`${view}View`).classList.add('active');
-  document.querySelector(`[data-view="${view}"]`).classList.add('active');
+  const target = $(`${view}View`);
+  if (!target) return;
+  target.classList.add('active');
+  document.querySelector(`[data-view="${view}"]`)?.classList.add('active');
   els.sidebar.classList.remove('open');
   if (view === 'favorites') renderFavorites();
+  if (view === 'detail') renderDetail();
 }
 
 function openFavoriteDialog(id) {
   const project = findProject(id);
-  const favorite = favoriteById(id);
+  const favorite = project ? favoriteForProject(project) : null;
   if (!project) return;
-  els.projectId.value = id;
+  els.projectId.value = projectKey(project);
   els.dialogTitle.textContent = favorite ? `编辑收藏 · ${project.name}` : `收藏 · ${project.name}`;
   els.tags.value = favorite?.tags?.join(', ') || '';
   els.note.value = favorite?.note || '';
@@ -681,7 +939,7 @@ async function loadInsightStatus(force = false) {
 
 async function loadCachedInsights(projects) {
   if (!state.insightServiceAvailable) return;
-  const ids = unique(projects.map((project) => project.id)).filter((id) => !state.insights[id]).slice(0, 250);
+  const ids = unique(projects.flatMap((project) => entityLookupIds(project))).filter((id) => !state.insights[id]).slice(0, 250);
   if (!ids.length) return;
   try {
     const response = await fetchJsonSafe(`/api/insights?ids=${encodeURIComponent(ids.join(','))}`);
@@ -691,6 +949,7 @@ async function loadCachedInsights(projects) {
     renderRadar();
     renderFavorites();
     if (state.results.length) renderResults();
+    if (state.activeDetailId) renderDetail();
   } catch {
     // Cached insight loading is optional and must not block radar use.
   }
@@ -744,7 +1003,7 @@ function renderInsightDetails(project, insight, { loading = false, error = '' } 
 }
 
 async function generateProjectInsight(project, force = false) {
-  renderInsightDetails(project, state.insights[project.id], { loading: true });
+  renderInsightDetails(project, projectInsight(project), { loading: true });
   try {
     const insight = await fetchJsonSafe('/api/insights/generate', {
       method: 'POST',
@@ -756,6 +1015,7 @@ async function generateProjectInsight(project, force = false) {
     renderRadar();
     renderFavorites();
     if (state.results.length) renderResults();
+    if (state.activeDetailId) renderDetail();
     await loadInsightStatus(false);
     toast(insight.source === 'ollama' ? (insight.cached ? '已读取本地AI缓存' : '中文解读已生成并缓存') : '本地AI未就绪，已显示规则摘要');
   } catch (error) {
@@ -767,16 +1027,17 @@ async function generateProjectInsight(project, force = false) {
 function openInsightDialog(id) {
   const project = findProject(id);
   if (!project) return;
-  state.activeInsightId = id;
+  state.activeInsightId = projectKey(project);
   els.insightTitle.textContent = `中文解读 · ${project.name}`;
-  els.insightSubtitle.textContent = `${platformMeta(project).label} · ${project.owner || '未知作者'} · ${project.license || '许可证待核查'}`;
-  renderInsightDetails(project, state.insights[id]);
+  els.insightSubtitle.textContent = `${project.sourceCount > 1 ? `${project.sourceCount}个平台来源 · ` : ''}${platformMeta(project).label} · ${project.owner || '未知作者'} · ${project.license || '许可证待核查'}`;
+  const insight = projectInsight(project);
+  renderInsightDetails(project, insight);
   els.insightDialog.showModal();
-  if (!state.insights[id] && state.insightServiceAvailable) void generateProjectInsight(project, false);
+  if (!insight && state.insightServiceAvailable) void generateProjectInsight(project, false);
 }
 
 async function loadHistoryGrowth(projects, capture = false) {
-  const trackable = dedupeProjects(projects).filter((project) => project.platform !== 'gitee').slice(0, 400);
+  const trackable = dedupeProjects(projects.flatMap((project) => entitySources(project))).filter((project) => project.platform !== 'gitee').slice(0, 400);
   if (!trackable.length) return;
   try {
     if (capture) {
@@ -807,7 +1068,8 @@ async function radar(force = false) {
   if (!force) {
     const cached = loadRadarCache();
     if (cached?.projects?.length) {
-      state.projects = dedupeProjects([...cached.projects, ...seed.map(normalizeProject)]);
+      state.rawProjects = dedupeProjects([...cached.projects.flatMap((project) => entitySources(project)), ...seed.map(normalizeProject)]);
+      state.projects = dedupeEntities(state.rawProjects);
       state.sourceStatus = cached.sourceStatus || {};
       els.status.textContent = '本地缓存 · 点击刷新可重新扫描';
       els.status.className = 'live';
@@ -815,6 +1077,7 @@ async function radar(force = false) {
       renderRadar();
       void loadHistoryGrowth(state.projects, false);
       void loadCachedInsights([...state.projects, ...state.favorites]);
+      openHashProject();
       return;
     }
   }
@@ -847,11 +1110,12 @@ async function radar(force = false) {
     }
   });
 
-  state.projects = liveProjects.length
+  state.rawProjects = liveProjects.length
     ? dedupeProjects([...liveProjects, ...seed.map(normalizeProject)])
     : seed.map(normalizeProject);
+  state.projects = dedupeEntities(state.rawProjects);
 
-  if (liveProjects.length) saveRadarCache(state.projects, state.sourceStatus);
+  if (liveProjects.length) saveRadarCache(state.rawProjects, state.sourceStatus);
   const liveCount = Object.values(state.sourceStatus).filter((status) => status.state === 'live').length;
   const failedCount = Object.values(state.sourceStatus).filter((status) => status.state === 'error').length;
   const searchOnlyCount = Object.values(state.sourceStatus).filter((status) => status.badge === '外部搜索').length;
@@ -863,10 +1127,15 @@ async function radar(force = false) {
   renderRadar();
   void loadHistoryGrowth(liveProjects.length ? liveProjects : state.projects, Boolean(liveProjects.length));
   void loadCachedInsights([...state.projects, ...state.favorites]);
+  openHashProject();
 }
 
 function dedupeProjects(projects) {
-  return [...new Map(projects.map((project) => [project.id, normalizeProject(project)])).values()];
+  return [...new Map((Array.isArray(projects) ? projects : []).filter((project) => project?.id).map((project) => [project.id, normalizeProject(project)])).values()];
+}
+
+function dedupeEntities(projects) {
+  return mergeProjectEntities(dedupeProjects(projects)).map(normalizeProject);
 }
 
 function unique(values) {
@@ -966,14 +1235,16 @@ async function searchProjects(query) {
     }
   });
 
-  state.results = dedupeProjects(projects);
+  state.rawResults = dedupeProjects(projects);
+  state.results = dedupeEntities(state.rawResults);
   sortSearchResults();
 
   const expanded = plan.terms.length ? `已扩展关键词：${plan.terms.slice(0, 10).join(' · ')}。` : '';
   const failedPlatforms = selectedPlatforms.filter((platformId) => state.searchSourceStatus[platformId]?.state === 'error');
   const searchOnlyPlatforms = selectedPlatforms.filter((platformId) => state.searchSourceStatus[platformId]?.badge === '外部搜索');
   const fallbackPlatforms = selectedPlatforms.filter((platformId) => ['error', 'empty'].includes(state.searchSourceStatus[platformId]?.state));
-  els.searchSummary.textContent = `“${query}” 找到 ${state.results.length} 个候选。${expanded}${searchOnlyPlatforms.length ? `${searchOnlyPlatforms.map((platformId) => platformCatalog[platformId].label).join('、')} 仅提供外部搜索入口。` : ''}${failedPlatforms.length ? `${failedPlatforms.map((platformId) => platformCatalog[platformId].label).join('、')} 当前故障。` : ''}许可证需在正式采用前再次核查。`;
+  const dedupStats = deduplicationStats(state.rawResults, state.results);
+  els.searchSummary.textContent = `“${query}” 找到 ${dedupStats.entityCount} 个项目实体${dedupStats.mergedSourceCount ? `，合并了 ${dedupStats.mergedSourceCount} 条跨平台重复来源` : ''}。${expanded}${searchOnlyPlatforms.length ? `${searchOnlyPlatforms.map((platformId) => platformCatalog[platformId].label).join('、')} 仅提供外部搜索入口。` : ''}${failedPlatforms.length ? `${failedPlatforms.map((platformId) => platformCatalog[platformId].label).join('、')} 当前故障。` : ''}许可证需在正式采用前再次核查。`;
   renderSourceHealth(els.searchSources, state.searchSourceStatus);
   renderSearchFallbacks(query, fallbackPlatforms);
   renderResults();
@@ -1011,10 +1282,12 @@ async function detectRuntimeMode() {
     if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) throw new Error('静态服务器');
     const health = await response.json();
     if (!health.giteeProxy) throw new Error('兼容通道未启用');
+    state.codexExportAvailable = Boolean(health.codexExport);
     els.runtimeMode.textContent = '● 本地兼容服务';
     els.runtimeMode.className = 'runtime-live';
-    els.runtimeDetail.textContent = health.insights ? '五平台实时 · Gitee受限 · 历史与本地AI' : '五平台实时 · Gitee受限 · 本地历史';
+    els.runtimeDetail.textContent = health.insights ? `五平台实时 · 跨平台去重 · 历史、本地AI与${health.codexExport ? 'Codex研究包' : '浏览器研究提示词'}` : '五平台实时 · 跨平台去重 · 本地历史';
   } catch {
+    state.codexExportAvailable = false;
     els.runtimeMode.textContent = '● 静态模式';
     els.runtimeMode.className = 'runtime-warn';
     els.runtimeDetail.textContent = '五平台可用 · Gitee请改用 node server.mjs';
@@ -1028,7 +1301,11 @@ function init() {
   els.suggestions.innerHTML = suggestions.map((query) => `<button class="chip" data-query="${escapeHtml(query)}">${escapeHtml(query)}</button>`).join('');
 
   document.querySelectorAll('.nav').forEach((button) => {
-    button.onclick = () => navigate(button.dataset.view);
+    button.onclick = () => {
+      if (location.hash.startsWith('#project=')) history.replaceState(null, '', `${location.pathname}${location.search}`);
+      state.activeDetailId = '';
+      navigate(button.dataset.view);
+    };
   });
 
   els.categories.onclick = (event) => {
@@ -1085,14 +1362,15 @@ function init() {
     event.preventDefault();
     const project = findProject(els.projectId.value);
     if (!project) return;
+    const existing = favoriteForProject(project);
     const item = normalizeProject({
       ...project,
       tags: els.tags.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean),
       note: els.note.value.trim(),
       action: els.action.value,
-      savedAt: favoriteById(project.id)?.savedAt || new Date().toISOString(),
+      savedAt: existing?.savedAt || new Date().toISOString(),
     });
-    state.favorites = [item, ...state.favorites.filter((favorite) => favorite.id !== project.id)];
+    state.favorites = [item, ...state.favorites.filter((favorite) => !entitiesOverlap(favorite, project))];
     persistFavorites();
     els.dialog.close();
     toast('已保存到收藏库');
@@ -1159,6 +1437,13 @@ function init() {
     }
   };
 
+  window.addEventListener('hashchange', () => {
+    if (!openHashProject() && document.getElementById('detailView')?.classList.contains('active')) {
+      state.activeDetailId = '';
+      navigate('radar');
+    }
+  });
+
   window.addEventListener('beforeinstallprompt', (event) => {
     event.preventDefault();
     state.install = event;
@@ -1177,6 +1462,7 @@ function init() {
   renderHistoryStatus();
   renderInsightStatus();
   radar(false);
+  openHashProject();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 

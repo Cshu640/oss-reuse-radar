@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07101d">
-  <meta name="description" content="跨平台开源项目发现、搜索与收藏雷达">
+  <meta name="description" content="跨平台开源项目发现、去重、详情、中文解读与Codex研究雷达">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
@@ -36,7 +36,7 @@
       <section id="radarView" class="view active">
         <div class="hero">
           <div><em>OPEN-SOURCE INTELLIGENCE</em><h1>今天有哪些项目<br>值得立即关注？</h1><p>跨平台发现、真实增长、免费中文大白话、许可证判断、收藏与后续接入建议。</p></div>
-          <div class="metrics"><div><b id="candidateMetric">—</b><span>本次候选</span></div><div><b id="freshMetric">—</b><span>30天内新项目</span></div><div><b id="savedMetric">0</b><span>已收藏</span></div></div>
+          <div class="metrics"><div><b id="candidateMetric">—</b><span>项目实体</span></div><div><b id="mergedMetric">—</b><span>已合并重复来源</span></div><div><b id="freshMetric">—</b><span>30天内新项目</span></div><div><b id="savedMetric">0</b><span>已收藏</span></div></div>
         </div>
         <div class="toolbar">
           <div class="tabs"><button class="tab active" data-period="today">24小时增长</button><button class="tab" data-period="week">7天增长</button><button class="tab" data-period="month">30天增长</button><button class="tab" data-period="rising">低 Star 高潜力</button></div>
@@ -71,6 +71,10 @@
         <div id="favoriteGrid" class="grid"></div>
       </section>
 
+      <section id="detailView" class="view">
+        <div id="detailContent"></div>
+      </section>
+
       <section id="watchView" class="view">
         <div class="page-title"><em>LOCAL HISTORY</em><h1>观察名单与真实增长</h1><p>本地服务器启动时立即采集，之后每6小时扫描五个实时平台；只有历史跨度足够才显示真实涨幅。</p></div>
         <div class="history-metrics">
@@ -81,7 +85,7 @@
         </div>
         <article class="roadmap history-panel"><div class="split"><div><h3>本地历史系统</h3><p id="historyMode">检测中</p></div><button id="collectHistory" class="primary">立即采集一次</button></div><p id="historyNote">正在检测本地服务器。</p><ul><li>24小时榜：历史跨度达到约20小时后才启用</li><li>7天榜：历史跨度达到约6天后才启用</li><li>30天榜：历史跨度达到约25天后才启用</li><li>不同平台分别使用 Stars、Likes 或 Downloads，不把原始数字强行混成同一单位</li><li>本地数据保存在 <code>data/history.json</code>，不会上传到第三方</li></ul></article>
         <article class="roadmap insight-panel"><div class="split"><div><h3>免费中文大白话</h3><p id="insightMode">检测本地Ollama</p></div><button id="refreshInsights">重新检测</button></div><p id="insightNote">未检测。</p><div class="insight-mini-metrics"><span><b id="insightCount">—</b> 已缓存解读</span><span><b id="insightModel">qwen3:4b</b> 当前模型</span></div><ul><li>所有项目先显示不耗算力的规则摘要</li><li>点击“中文解读”后才调用本地模型，每次只处理一个项目</li><li>生成后保存在 <code>data/insights.json</code>，项目未更新时直接复用</li><li>模型请求结束后立即卸载，避免持续占用显存</li></ul></article>
-        <article class="roadmap"><h3>后续路线</h3><ul><li>云端无人值守定时采集</li><li>跨平台同项目身份去重</li><li>收藏项目优先追踪与爆发提醒</li><li>ecosyste.ms 与软件包生态</li><li>Codex MCP 与仓库级接入分析</li></ul></article>
+        <article class="roadmap"><h3>当前与后续路线</h3><ul><li>已完成保守型跨平台身份去重与统一项目详情页</li><li>已完成Codex研究包导出；不会自动消耗Codex额度</li><li>下一步：云端无人值守定时采集</li><li>收藏项目优先追踪与爆发提醒</li><li>ecosyste.ms、软件包生态与Codex MCP仓库级接入</li></ul></article>
       </section>
     </main>
   </div>

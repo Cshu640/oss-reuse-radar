@@ -164,3 +164,18 @@
 - 测试：语法、server测试、四条Gitee路径、health、diff均通过；Windows真实Explore未运行。
 - 下一项唯一任务：Phase 0.3-A本地历史快照与六小时后台采集。
 - 关键文件：`server.mjs`、`platform-adapters.js`、`app.js`、测试与交接文件。
+
+## 2026-07-28 — Phase 0.3-A local historical snapshot foundation
+- 当前阶段：Phase 0.3-A — Local Historical Snapshot Foundation
+- 分支：`phase-0.3-a-local-history`
+- Functional HEAD：`dc554a8`
+- 状态：功能代码完成；本地单元、HTTP、实际Node启动、模拟桌面/移动浏览器测试通过；用户Windows未验收，真实24小时/7天/30天需等待自然时间。
+- 已完成：零依赖本地历史文件；原子写入；400天保留；五平台启动与六小时后台采集；浏览器补充快照；四个历史API；真实delta与覆盖时长；基线就绪阈值；平台内百分位跨平台排序；历史面板；手动采集；Gitee有界诊断与external-search止损；收藏兼容。
+- 未完成：Windows真实文件写入验收；自然时间增长验收；云端无人值守；收藏优先追踪；跨平台去重；历史导出；软件包生态；MCP；生产部署。
+- 当前阻塞：需要用户Windows运行验证；历史周期必须等待真实时间，不能模拟为验收通过。
+- 禁止事项：不得伪造历史涨幅；不得混比跨平台原始指标；不得将Gitee外部搜索计入增长；不得提交data/history.json；不得破坏收藏或暴露密钥。
+- 已知问题和风险：服务器关闭时不采集；睡眠/关机会形成缺口；候选池非全网全量；匿名API可能限频；跨平台镜像未去重。
+- 工作区/暂存/提交/标签/推送/合并：functional commit后clean；写README/AGENTS/交接后dirty；staged none；functional commit `dc554a8`；tags none；not pushed；merge none。
+- 测试：五个JS/MJS语法；history store；collector隔离；server APIs；Gitee止损；Chromium模拟桌面/390px移动；真实本地8097启动、health、history status、首页HTTP均通过；Windows与真实外部后台采集未运行。
+- 下一项唯一任务：用户Windows启动Phase 0.3-A，确认History终端信息、历史面板、手动采集和data/history.json创建；只修真实运行缺陷。
+- 关键文件：`history-store.mjs`、`server.mjs`、`app.js`、`index.html`、`styles.css`、三套测试、README与交接文件。

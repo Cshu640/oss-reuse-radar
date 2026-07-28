@@ -179,3 +179,33 @@
 - 测试：五个JS/MJS语法；history store；collector隔离；server APIs；Gitee止损；Chromium模拟桌面/390px移动；真实本地8097启动、health、history status、首页HTTP均通过；Windows与真实外部后台采集未运行。
 - 下一项唯一任务：用户Windows启动Phase 0.3-A，确认History终端信息、历史面板、手动采集和data/history.json创建；只修真实运行缺陷。
 - 关键文件：`history-store.mjs`、`server.mjs`、`app.js`、`index.html`、`styles.css`、三套测试、README与交接文件。
+
+## 2026-07-29 — Phase 0.3-A user runtime acceptance
+- 当前阶段：Phase 0.3-A — Local Historical Snapshot Foundation
+- 分支：`phase-0.3-a-local-history`
+- HEAD：`0484b54`（用户使用的已打包版本）
+- 状态：用户在Windows真实环境确认“都可以用了”，本地服务器、历史状态、文件写入与手动使用链路验收通过；真实24小时、7天、30天榜仍需自然时间。
+- 已完成：Windows真实启动；本地历史功能可用；`data/history.json`运行链路可用；五平台实时数据；Gitee止损降级；收藏兼容。
+- 未完成：自然时间增长榜验收；关机后云端持续采集；跨平台去重；数据导出与迁移；MCP。
+- 当前阻塞：历史周期只能等待真实时间，不能即时验收。
+- 禁止事项：不得将运行链路通过写成24小时、7天、30天数值已验收；不得伪造历史数据。
+- 已知问题和风险：本地服务器关闭、电脑关机或睡眠时会形成历史缺口。
+- 工作区/暂存/提交/标签/推送/合并：用户机器Git状态未检查；开发bundle HEAD `0484b54`；tags none；not pushed；merge none。
+- 测试：用户Windows确认Phase 0.3-A整体可用。
+- 下一项唯一任务：Phase 0.3-B本地Ollama中文大白话、个人适配分析与持久化缓存。
+- 关键文件：`history-store.mjs`、`server.mjs`、`app.js`、`data/history.json`。
+
+## 2026-07-29 — Phase 0.3-B local Chinese plain-language insights
+- 当前阶段：Phase 0.3-B — Local Chinese Plain-Language Insights
+- 分支：`phase-0.3-b-local-insights`
+- Functional HEAD：`0812d3d`
+- 当前状态：功能代码完成；本地单元、HTTP、实际Node启动、模拟桌面/移动浏览器与Ollama离线降级测试通过；用户Windows真实`qwen3:4b`生成未验收。
+- 已完成：所有项目规则摘要；Ollama与模型检测；`qwen3:4b`默认配置；结构化JSON Schema；串行生成；`keep_alive: 0`；README安全节选；本地`data/insights.json`缓存；指纹失效；完整中文适配分析弹窗；观察名单Ollama状态；三条Insights API；收藏与历史兼容。
+- 未完成：Windows真实模型输出；真实README跨平台成功率；用户编辑纠错；收藏优先批量；跨平台去重；历史/解读导出迁移；云采集；软件包生态；MCP；生产部署。
+- 当前阻塞：需要用户Windows真实Ollama与`qwen3:4b`验收；历史周期仍需自然时间。
+- 禁止事项：不得自动批量生成全部项目；不得并发本地模型；不得把规则摘要标成AI；不得编造README未提供的信息；不得把AI许可说明写成法律结论；不得提交运行数据；不得加入付费API。
+- 已知问题和风险：首次加载较慢；小模型可能误判；真实结构化输出可能偶发失败；匿名README路径可能限频或找不到；`keep_alive: 0`会让连续生成重复加载模型。
+- 工作区/暂存/提交/标签/推送/合并：功能提交后clean；写README、AGENTS和交接后dirty；staged none；functional commit `0812d3d`；tags none；not pushed；merge none。
+- 测试：全部JS/MJS语法；历史回归；insight store/service；Ollama状态/Schema/缓存/强制生成/离线降级；Insights HTTP；桌面弹窗；390px移动端；实际8098启动、health、insight status、规则降级与首页HTTP均通过；用户Windows真实模型未执行。
+- 下一项唯一任务：用户Windows运行Phase 0.3-B，确认Ollama状态，分别生成一个GitHub和一个Hugging Face或ModelScope项目中文解读，确认`data/insights.json`写入和缓存复用；只修真实兼容缺陷。
+- 关键文件：`insight-store.mjs`、`insight-service.mjs`、`server.mjs`、`app.js`、`index.html`、`styles.css`、三套测试与交接文件。

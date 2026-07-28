@@ -83,3 +83,18 @@
 - 测试：用户Windows Edge真实结果——GitHub 48、Hugging Face 18、GitLab 18、Codeberg 18、ModelScope 18、Gitee不可用。
 - 下一项唯一任务：Phase 0.2-B.1 增加本地同源Gitee兼容代理，优先调用官方v5 API，失败或空结果时低频回退到Gitee官方搜索页面，并保持零付费API。
 - 关键文件：`platform-adapters.js`、计划新增 `server.mjs`、`app.js`、`README.md`、交接文件。
+
+## 2026-07-28 — Phase 0.2-B.1 Gitee compatibility fallback
+- 当前阶段：Phase 0.2-B.1 — Gitee Browser Compatibility Fallback
+- 分支：`phase-0.2-b.1-gitee-fallback`
+- Functional HEAD：`2a99832`
+- 当前状态：功能代码完成；本地Node、HTTP、静态与Chromium模拟测试通过；真实Gitee上游和用户Windows验收未完成。
+- 已完成：本地同源Node服务；Gitee v5 API优先；v5失败或空结果时回退Gitee官方搜索页面；HTML/嵌入JSON解析；15分钟缓存；12秒超时；固定上游与输入限制；运行模式识别；Windows双击启动器；Gitee回退标签；PWA缓存v4；API绕过；ModelScope移除实验标识；收藏v1兼容。
+- 未完成：用户Windows真实Gitee验收；真实so.gitee页面结构验证；Gitee元数据完整度；跨平台去重；历史快照；软件包生态；外部热点；云收藏；MCP；生产部署。
+- 当前阻塞：开发容器无法解析或访问Gitee域名；需要用户Windows Edge截图与结果。
+- 禁止事项：不得把模拟解析写成真实Gitee通过；不得移除Gitee实验标识；不得开放任意代理；不得暴露Token；不得加入付费API；不得把代理分写成真实增长；不得破坏收藏。
+- 已知问题和风险：Gitee v5搜索存在空结果公开反馈；官方搜索网页结构可能变化；回退结果字段可能不完整；静态服务器不提供Gitee代理；旧PWA缓存可能需强刷。
+- 工作区/暂存/提交/标签/推送/合并：功能提交后clean；写交接后dirty；staged none；functional commit `2a99832`；tags none；not pushed；merge none。
+- 测试：四个JS/MJS语法检查；Node服务与解析测试；v5成功/空结果回退/缓存；API健康与静态HTTP；六平台桌面模拟；390px移动端；Gitee回退标签；中文搜索；收藏键；Manifest；diff均通过。真实Gitee未执行。
+- 下一项唯一任务：用户使用 `node server.mjs` 或 `start-openradar.cmd` 运行新版，验证Gitee首页和中文搜索；只修复真实兼容问题。
+- 关键文件：`server.mjs`、`start-openradar.cmd`、`platform-adapters.js`、`app.js`、`sw.js`、`tests/server_test.mjs`、`tests/browser_mock_test.py`、交接文件。

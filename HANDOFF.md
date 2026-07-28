@@ -1,102 +1,125 @@
 # OpenRadar Handoff
 
 ## 当前阶段
-Phase 0.2-B — Multi-Platform Public API Adapters
+Phase 0.2-B.1 — Gitee Browser Compatibility Fallback
 
 ## 分支和 HEAD
-- Branch：`phase-0.2-b-multi-platform-adapters`
-- Functional HEAD：`ceb75c5`
-- 当前 HEAD：`0ddfffe`（交接提交；当前文件的最终状态指针尚未提交）
+- Branch：`phase-0.2-b.1-gitee-fallback`
+- Functional HEAD：`2a99832`
+- 当前 HEAD：交接提交后需再次同步
 
 ## 当前状态
-用户已在 Windows Edge 完成真实验收：GitHub、Hugging Face、GitLab、Codeberg、ModelScope 均成功返回数据；Gitee 显示不可用。Phase 0.2-B 已作为五平台实时雷达验收通过，但六平台目标仍有一项适配器失败。ModelScope 可移除实验状态；Gitee 继续保持实验与降级提示。
+Phase 0.2-B.1 功能代码已完成。针对用户 Windows Edge 中 Gitee 显示“不可用”的真实问题，新增本地同源 Node 服务 `server.mjs`：浏览器不再直接跨域请求 Gitee，而是访问同源 `/api/gitee/search`。本地服务优先调用 Gitee 官方 v5 仓库搜索 API；该接口失败或返回空数组时，低频回退到 Gitee 官方 `so.gitee.com` 搜索页面并解析仓库结果。所有通道均为免费公开读取，不需要在前端存放 Token。
+
+本阶段已完成静态、Node单元、HTTP和Chromium模拟验证，但开发容器仍无法访问真实 Gitee 网络，因此不得写成 Gitee 已验收通过。下一步必须由用户在 Windows 使用 `node server.mjs` 或双击 `start-openradar.cmd` 进行真实验证。
 
 ## 已完成
-- 新建 `platform-adapters.js`，集中管理平台元数据、请求超时、搜索、首页雷达、返回结构标准化和备用搜索链接
-- 接入 GitHub、Hugging Face、GitLab、Codeberg、Gitee、ModelScope 六个平台
-- 首页平台筛选扩展为全部六个平台
-- 灵感搜索支持选择任意一个或多个平台并行查询
-- GitHub/GitLab/Codeberg/Gitee 卡片使用 Stars 与 Forks 指标
-- Hugging Face/ModelScope 卡片使用 Likes 与 Downloads 指标
-- 首页和搜索页显示平台级 `loading/live/empty/error` 状态、结果数量与降级原因
-- 空结果或接口失败时提供前往对应平台直接搜索的备用入口
-- Gitee、ModelScope 保持“实验”标记
-- Gitee、ModelScope 优先尝试中文原始需求；其他平台使用本地扩展后的英文技术关键词
-- 请求增加12秒超时，单个平台失败不会阻塞其他平台
-- 雷达缓存升级为 `openradar:radar-cache:v3`，收藏键继续保持 `openradar:favorites:v1`
-- Service Worker 缓存升级为 v3，并缓存平台适配器
-- 增加可重复执行的六平台 Chromium 模拟测试 `tests/browser_mock_test.py`
-- README 与 Agent 约束同步更新
+- 新增 `server.mjs`，同时提供静态文件服务、`/api/health` 和 `/api/gitee/search`
+- Gitee同源兼容通道优先调用官方 v5 API
+- v5 API失败或空结果时回退到 Gitee 官方 `so.gitee.com` 搜索页面
+- Gitee回退HTML解析支持嵌入JSON与仓库链接两种路径
+- 上游请求12秒超时
+- Gitee搜索结果15分钟内存缓存
+- 查询长度、返回数量和上游域名固定限制；不是开放CORS代理
+- 前端Gitee适配器优先使用同源代理，静态模式下再尝试浏览器直连
+- Gitee通过官方搜索回退时，状态标签显示“搜索回退”并保留原因提示
+- 页面左下角自动识别“本地兼容服务”或“静态模式”
+- 新增Windows双击启动器 `start-openradar.cmd`
+- ModelScope已通过上一阶段用户真实验收，移除“实验”标识
+- Gitee继续保留“实验”标识，等待本阶段真实验收
+- 雷达缓存升级为 `openradar:radar-cache:v4`
+- Service Worker升级为 v4，并明确绕过 `/api/`，避免离线壳把API错误替换成HTML
+- 收藏键继续保持 `openradar:favorites:v1`
+- 新增 `tests/server_test.mjs`
+- 更新六平台Chromium模拟测试以覆盖同源Gitee代理和运行模式检测
+- README与AGENTS规则更新
 
 ## 未完成
-- Gitee 浏览器兼容与稳定性结论；Gitee仍为实验数据源
-- GitLab/Codeberg 返回项目的语言和许可证深度补全
-- 跨平台同项目身份去重；当前只按平台内标准 ID 去重
-- 历史快照数据库及真实24小时/7天/30天增速
-- ecosyste.ms、npm、PyPI 等软件包生态
-- Hacker News 等外部热点信号源
-- 云端收藏同步与多设备访问
-- Codex MCP Server 与当前仓库适配分析
+- 用户 Windows Edge 使用 `node server.mjs` 对 Gitee 首页雷达真实验收
+- 用户 Windows Edge 对 Gitee 中文灵感搜索真实验收
+- Gitee官方搜索页面真实HTML结构验证；当前解析器仅通过本地夹具与模拟页面
+- Gitee回退结果的许可证、语言、Star与Fork完整度验证
+- 跨平台同项目身份去重
+- 历史快照数据库与真实24小时/7天/30天增长
+- ecosyste.ms、npm、PyPI等软件包生态
+- Hacker News等外部热点信号
+- 云端收藏同步
+- Codex MCP Server
 - 生产部署
 
 ## 当前阻塞
-- Gitee 浏览器直连公开搜索接口在用户Windows Edge不可用；需要本地同源代理或其他零成本备用通道
+- 开发容器无法解析或访问 `gitee.com` 与 `so.gitee.com`，不能完成真实上游返回和CORS验证
+- 需要用户在 Windows Edge 中运行新版并提供Gitee状态与搜索结果截图
 
 ## 禁止事项
-- 不得把代理潜力分描述成真实涨幅
-- 不得把各平台 Star、Like、Downloads 原始数字直接描述成同口径全网排名
-- 不得把模拟 API 测试通过描述成真实外部 API 通过
-- Gitee在兼容修复完成并经用户真实验收前不得移除“实验”标识
-- 不得在前端加入 GitHub Token、Supabase service role key、平台私钥或模型密钥
+- 不得把本地模拟和HTML夹具解析通过描述成Gitee真实接口通过
+- Gitee在用户真实验收前不得移除“实验”标识
+- 不得把代理潜力分描述成真实24小时、7天或30天涨幅
+- 不得把不同平台的Star、Like、Downloads直接当作统一绝对热度
+- 不得在前端加入Gitee Token、GitHub Token、Supabase service role key或其他密钥
+- 不得把本地服务改造成可代理任意网址的开放代理
+- 不得移除查询长度、数量限制、上游白名单、缓存和超时
 - 不得更换 `openradar:favorites:v1` 而不提供迁移
-- 第一版不得加入付费 API
-- 不得因新增平台失败而清除其他平台结果或用户收藏
+- 第一版不得加入付费API
+- 不得因Gitee失败而清除其他平台结果或用户收藏
 
 ## 已知问题和风险
-- Gitee 公共搜索接口可能返回空结果、发生策略变化或受跨域限制
-- ModelScope OpenAPI 的公开读取与字段结构可能变化，当前适配器做了多字段兼容但仍需真实数据验证
-- GitLab Projects 列表通常不直接提供完整许可证和主语言，卡片可能显示“许可证待核查”
-- Codeberg/Forgejo 实例接口参数和限频可由实例管理员调整
-- 六个平台并行搜索会增加匿名接口请求量；15分钟雷达缓存只覆盖首页，不覆盖所有即时搜索
-- 跨平台镜像与同一项目尚未关联，可能出现重复项目
-- 自动分类、用途判断和许可证元数据仍需人工复核
-- localStorage 被清除时收藏会丢失，应继续保留 JSON 导出
+- Gitee v5仓库搜索存在公开的空结果缺陷反馈，即便携带个人Token也可能返回空数组
+- `so.gitee.com` 页面结构属于网页实现细节，未来变化可能导致解析器失效
+- 网页回退结果可能缺失准确许可证、语言、Star或Fork字段
+- 本地服务只监听 `127.0.0.1`，不会供局域网其他设备访问
+- 直接使用 `npx serve` 或 Python静态服务器时，Gitee同源兼容通道不会启用；另外五个平台仍可工作
+- PWA旧缓存可能需要关闭重开或 `Ctrl + F5` 才会加载v4资源
+- 跨平台镜像尚未去重
+- 自动分类、用途判断和许可证仍需人工复核
+- localStorage被清除时收藏会丢失，应继续导出JSON备份
 
 ## 测试
 - `node --check app.js`：通过
 - `node --check platform-adapters.js`：通过
 - `node --check sw.js`：通过
-- `manifest.webmanifest` JSON 解析：通过
+- `node --check server.mjs`：通过
+- `node tests/server_test.mjs`：通过
+  - Gitee HTML夹具解析2个仓库
+  - v5空结果转官方搜索回退
+  - 15分钟缓存路径
+  - v5 API成功路径
+  - `/api/health` HTTP验证
+  - `/api/gitee/search` HTTP验证
+  - 静态 `index.html` HTTP 200
+- `python3 tests/browser_mock_test.py`：通过
+  - 桌面端7张候选卡
+  - 6个平台live状态
+  - Gitee“搜索回退”标签
+  - 本地兼容服务状态
+  - 中文NPC记忆系统搜索扩展
+  - 390×844移动端无横向溢出
+  - 收藏键兼容
+- Manifest JSON解析：通过
 - `git diff --check`：通过
-- 本地 HTTP 200：`/`、`index.html`、`styles.css`、`app.js`、`platform-adapters.js`、Manifest、图标均通过
-- Chromium 六平台模拟桌面测试：通过；7张项目卡、6个平台 live 状态、7个平台筛选选项
-- Chromium 390×844 移动端测试：通过；菜单可打开、无水平溢出
-- 中文“适合网页游戏的开源NPC记忆系统”搜索扩展：通过
-- Gitee/ModelScope 中文原始查询优先：模拟 URL 断言通过
-- 六种平台返回结构标准化：模拟测试通过
-- 收藏存储键静态兼容：`openradar:favorites:v1` 保持不变
-- 真实外部 API：未在开发容器验证
-- 用户 Windows Edge：GitHub 48、Hugging Face 18、GitLab 18、Codeberg 18、ModelScope 18；Gitee不可用
+- 真实Gitee网络：开发容器未运行
+- 用户Windows Edge Phase 0.2-B.1：未验收
 
 ## Git 状态
-- Working tree：dirty，仅 `HANDOFF.md` 与 `docs/PROJECT_STATE.json` 的最终 HEAD/状态指针
+- Working tree：功能提交后clean；写入本交接后dirty
 - Staged：none
-- Current commit：`0ddfffe docs: record phase 0.2-b handoff`
-- Functional commit：`ceb75c5 feat: add six-platform source adapters`
+- Functional commit：`2a99832 fix: add local gitee compatibility channel`
 - Tags：none
-- Push：not pushed；origin 仍指向本地 Phase 0.1 bundle
+- Push：not pushed；origin仍指向本地Phase 0.1 bundle
 - Merge：none
 
 ## 下一项唯一任务
-Phase 0.2-B.1：增加本地同源 Gitee 兼容代理，优先调用官方 v5 API，失败或空结果时低频回退到 Gitee 官方搜索页面；保持零付费 API，并只修复 Gitee，不进入历史快照开发。
+用户在 Windows 解压 Phase 0.2-B.1，在包含 `index.html` 的目录双击 `start-openradar.cmd` 或运行 `node server.mjs`；确认左下角显示“本地兼容服务”，然后刷新首页并执行一次中文Gitee搜索。只修复真实Gitee返回、解析或字段兼容问题；验收前不得进入历史快照开发。
 
 ## 关键文件
-- `platform-adapters.js`：六平台目录、调用、标准化与降级入口
-- `app.js`：平台状态、并行雷达、跨平台搜索、卡片指标
-- `index.html`：六平台筛选与实验标识
-- `styles.css`：平台状态和多源搜索布局
-- `sw.js`：PWA v3 缓存
-- `tests/browser_mock_test.py`：可重复模拟浏览器测试
+- `server.mjs`：静态服务、运行健康检查、Gitee同源兼容通道、官方API与网页回退
+- `start-openradar.cmd`：Windows双击启动器
+- `platform-adapters.js`：Gitee代理优先与直连降级
+- `app.js`：运行模式检测、Gitee回退来源状态
+- `index.html`：运行模式显示与实验标识
+- `sw.js`：PWA v4与API绕过
+- `tests/server_test.mjs`：服务端与解析器测试
+- `tests/browser_mock_test.py`：六平台浏览器模拟测试
 - `README.md`
 - `AGENTS.md`
 - `docs/PROJECT_STATE.json`

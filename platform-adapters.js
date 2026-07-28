@@ -281,6 +281,7 @@ async function searchGitee(query, limit, mode = 'search') {
     if (data?.degraded) throw platformDegraded(data.warning || 'Gitee已降级为外部搜索入口');
     if (Array.isArray(data?.projects)) return projects;
   } catch (error) {
+    if (error?.degraded) throw error;
     proxyError = error;
   }
 

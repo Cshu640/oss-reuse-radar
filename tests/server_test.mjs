@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createGiteeSearchService, createOpenRadarServer, parseGiteeSearchHtml } from '../server.mjs';
+import { HistoryStore } from '../history-store.mjs';
 
 const fixture = `<!doctype html><html><body>
 <article class="repo-card">
@@ -83,7 +87,17 @@ const api = await apiService('radar', 5);
 assert.equal(api.source, 'gitee-v5-api');
 assert.equal(api.projects[0].full_name, 'demo/radar');
 
+const historyRoot = await mkdtemp(join(tmpdir(), 'openradar-server-history-'));
+const historyStore = new HistoryStore(join(historyRoot, 'history.json'));
+await historyStore.init();
+const historyCollector = {
+  getState: () => ({ running: false, lastProjectCount: 0 }),
+  collect: async () => ({ running: false, lastProjectCount: 0, lastAddedSamples: 0 }),
+};
+
 const server = createOpenRadarServer({
+  historyStore,
+  historyCollector,
   giteeSearch: async (query, limit) => ({
     projects: [{ full_name: 'mock/project', name: 'project', owner: { login: 'mock' }, html_url: 'https://gitee.com/mock/project' }],
     source: 'mock',
@@ -97,13 +111,29 @@ const address = server.address();
 const base = `http://127.0.0.1:${address.port}`;
 const health = await fetch(`${base}/api/health`).then((response) => response.json());
 assert.equal(health.giteeProxy, true);
+assert.equal(health.history, true);
 const proxied = await fetch(`${base}/api/gitee/search?q=AI&limit=3`).then((response) => response.json());
 assert.equal(proxied.projects.length, 1);
 assert.equal(proxied.query, 'AI');
+
+const captured = await fetch(`${base}/api/history/capture`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ projects: [{ id: 'github:mock/project', platform: 'github', name: 'project', owner: 'mock', url: 'https://github.com/mock/project', stars: 12, forks: 2 }] }),
+}).then((response) => response.json());
+assert.equal(captured.added, 1);
+const historyStatus = await fetch(`${base}/api/history/status`).then((response) => response.json());
+assert.equal(historyStatus.projectCount, 1);
+const historyGrowth = await fetch(`${base}/api/history/growth?ids=${encodeURIComponent('github:mock/project')}`).then((response) => response.json());
+assert.equal(historyGrowth.projects['github:mock/project'].sampleCount, 1);
+const manualCollect = await fetch(`${base}/api/history/collect`, { method: 'POST' }).then((response) => response.json());
+assert.equal(manualCollect.lastProjectCount, 0);
+
 const index = await fetch(`${base}/index.html`);
 assert.equal(index.status, 200);
 assert.match(index.headers.get('content-type'), /text\/html/);
 server.close();
 await once(server, 'close');
+await rm(historyRoot, { recursive: true, force: true });
 
-console.log(JSON.stringify({ parsed: parsed.length, fallbackSource: fallback.source, exploreSource: explore.source, stopLossSource: stopLoss.source, health, proxied: proxied.projects.length }, null, 2));
+console.log(JSON.stringify({ parsed: parsed.length, fallbackSource: fallback.source, exploreSource: explore.source, stopLossSource: stopLoss.source, health, proxied: proxied.projects.length, historyProjects: historyStatus.projectCount }, null, 2));

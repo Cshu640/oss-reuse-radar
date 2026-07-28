@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mocked browser smoke test for OpenRadar Phase 0.2-B.1.
+"""Mocked browser smoke test for OpenRadar Phase 0.3-A.
 
 This test never contacts external services. It exercises the six adapter schemas,
 Chinese query expansion, platform status rendering, responsive layout, and the
@@ -14,7 +14,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
-SCREENSHOT = Path('/mnt/data/open-source-radar-phase-0.2-b.1-browser.png')
+SCREENSHOT = Path('/mnt/data/open-source-radar-phase-0.3-a-browser.png')
 
 
 def build_html() -> str:
@@ -65,14 +65,21 @@ const repo = (platform, index = 1) => ({
   pushed_at: '2026-07-28T00:00:00Z',
   last_activity_at: '2026-07-28T00:00:00Z'
 });
-window.fetch = (input) => {
+window.fetch = (input, options = {}) => {
   const url = typeof input === 'string' ? input : input.url;
   window.__requestedUrls.push(url);
   if (url.includes('api.github.com')) return jsonResponse({ items: [repo('github', 1), repo('github', 2)] });
   if (url.includes('huggingface.co/api/models')) return jsonResponse([{ id: 'demo/hf-model', likes: 31, downloads: 900, pipeline_tag: 'text-generation', library_name: 'transformers', tags: ['license:apache-2.0', 'npc', 'memory'], lastModified: '2026-07-28T00:00:00Z', createdAt: '2026-07-02T00:00:00Z' }]);
   if (url.includes('gitlab.com/api/v4/projects')) return jsonResponse([repo('gitlab', 1)]);
   if (url.includes('codeberg.org/api/v1/repos/search')) return jsonResponse({ ok: true, data: [repo('codeberg', 1)] });
-  if (url.includes('/api/health')) return jsonResponse({ status: 'ok', version: '0.2-B.1', giteeProxy: true });
+  if (url.includes('/api/health')) return jsonResponse({ status: 'ok', version: '0.3-A', giteeProxy: true, history: true });
+  if (url.includes('/api/history/capture')) return jsonResponse({ received: 7, added: 7, skipped: 0 });
+  if (url.includes('/api/history/status')) return jsonResponse({ enabled: true, storage: 'local-json', projectCount: 7, sampleCount: 7, historyAgeHours: 2, firstCapturedAt: '2026-07-28T00:00:00Z', lastCapturedAt: '2026-07-28T02:00:00Z', readiness: { day: false, week: false, month: false }, collector: { running: false } });
+  if (url.includes('/api/history/growth')) {
+    const ids = decodeURIComponent(url.split('ids=')[1] || '').split(',').filter(Boolean);
+    const projects = Object.fromEntries(ids.map((id) => [id, { id, sampleCount: 1, periods: { day: { ready: false, coveredHours: 2, deltas: {} }, week: { ready: false, coveredHours: 2, deltas: {} }, month: { ready: false, coveredHours: 2, deltas: {} } } }]));
+    return jsonResponse({ projects, status: { projectCount: 7, sampleCount: 7, historyAgeHours: 2 } });
+  }
   if (url.includes('/api/gitee/search')) return jsonResponse({ projects: [repo('gitee', 1)], source: 'gitee-official-search', warning: 'mock fallback' });
   if (url.includes('modelscope.cn/openapi/v1/models')) return jsonResponse({ success: true, data: { models: [{ id: 'demo/ms-model', likes: 22, downloads: 1200, license: 'Apache License 2.0', tasks: ['text-generation', 'npc-memory'], library: 'PyTorch', last_modified: '2026-07-28T00:00:00Z', created_at: '2026-07-03T00:00:00Z' }] } });
   return Promise.reject(new Error(`Unmocked URL: ${url}`));
@@ -110,7 +117,9 @@ def run_viewport(page, width: int, height: int, save_screenshot: bool = False) -
       requestedUrls: window.__requestedUrls,
       horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
       sidebarOpen: document.getElementById('sidebar').classList.contains('open'),
-      favoriteKeyPresent: document.documentElement.innerHTML.includes('openradar:favorites:v1')
+      favoriteKeyPresent: document.documentElement.innerHTML.includes('openradar:favorites:v1'),
+      historyText: document.getElementById('radarDesc').textContent,
+      growthLines: document.querySelectorAll('#projectGrid .growth-line').length
     })''')
     result['errors'] = errors
     if save_screenshot:
@@ -126,6 +135,8 @@ def assert_result(result: dict, mobile: bool = False) -> None:
     for label in ('GitHub', 'Hugging Face', 'GitLab', 'Codeberg', 'Gitee', 'ModelScope'):
         assert label in result['labels'], (label, result['labels'])
     assert '找到 7 个候选' in result['summary'], result['summary']
+    assert '本地历史' in result['historyText'], result['historyText']
+    assert result['growthLines'] >= 6, result
     assert not result['horizontalOverflow'], result
     if mobile:
         assert result['sidebarOpen'], result

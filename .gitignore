@@ -3,3 +3,7 @@
 .env
 .env.*
 !.env.example
+
+# Local runtime history snapshots
+data/*.json
+data/*.tmp

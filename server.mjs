@@ -2,11 +2,15 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { HistoryStore } from './history-store.mjs';
+import { platformIds, radarPlatform } from './platform-adapters.js';
 
 const ROOT_DIR = fileURLToPath(new URL('.', import.meta.url));
 const DEFAULT_PORT = Number(process.env.PORT || 8080);
 const REQUEST_TIMEOUT = 12_000;
 const CACHE_TTL = 15 * 60 * 1000;
+const HISTORY_INTERVAL = 6 * 60 * 60 * 1000;
+const HISTORY_PLATFORMS = platformIds.filter((platformId) => platformId !== 'gitee');
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -200,7 +204,7 @@ export function createGiteeSearchService({ fetchImpl = fetch, now = () => Date.n
     const safeLimit = Math.min(30, Math.max(1, Number(limit) || 20));
     const allowExplore = Boolean(options.allowExplore);
     if (!safeQuery) throw new Error('缺少Gitee搜索关键词');
-    const cacheKey = `${safeQuery}\u0000${safeLimit}`;
+    const cacheKey = `${allowExplore ? 'radar' : 'search'}\u0000${safeQuery}\u0000${safeLimit}`;
     const cached = cache.get(cacheKey);
     if (cached && now() - cached.savedAt < CACHE_TTL) return { ...cached.value, cached: true };
 
@@ -283,6 +287,78 @@ export function createGiteeSearchService({ fetchImpl = fetch, now = () => Date.n
   };
 }
 
+async function readJsonBody(req, maxBytes = 2_000_000) {
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > maxBytes) throw new Error('Request body too large');
+    chunks.push(chunk);
+  }
+  if (!chunks.length) return {};
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
+export function createHistoryCollector({
+  historyStore,
+  radarPlatformImpl = radarPlatform,
+  platforms = HISTORY_PLATFORMS,
+  now = () => Date.now(),
+} = {}) {
+  const state = {
+    running: false,
+    lastStartedAt: '',
+    lastCompletedAt: '',
+    lastReason: '',
+    lastProjectCount: 0,
+    lastAddedSamples: 0,
+    platformResults: {},
+    error: '',
+  };
+
+  return {
+    getState() {
+      return { ...state, platformResults: { ...state.platformResults } };
+    },
+    async collect(reason = 'manual') {
+      if (!historyStore) throw new Error('History store is not configured');
+      if (state.running) return this.getState();
+      state.running = true;
+      state.lastStartedAt = new Date(now()).toISOString();
+      state.lastReason = String(reason).slice(0, 80);
+      state.error = '';
+      state.platformResults = Object.fromEntries(platforms.map((platformId) => [platformId, { state: 'loading', count: 0 }]));
+      try {
+        const responses = await Promise.allSettled(platforms.map((platformId) => radarPlatformImpl(platformId)));
+        const projects = [];
+        responses.forEach((response, index) => {
+          const platformId = platforms[index];
+          if (response.status === 'fulfilled') {
+            const values = Array.isArray(response.value) ? response.value : [];
+            projects.push(...values);
+            state.platformResults[platformId] = { state: values.length ? 'live' : 'empty', count: values.length };
+          } else {
+            state.platformResults[platformId] = { state: 'error', count: 0, message: response.reason?.message || String(response.reason) };
+          }
+        });
+        const deduped = [...new Map(projects.filter((project) => project?.id).map((project) => [project.id, project])).values()];
+        const result = deduped.length
+          ? await historyStore.capture(deduped, { source: `server-${state.lastReason}` })
+          : { added: 0, received: 0 };
+        state.lastProjectCount = deduped.length;
+        state.lastAddedSamples = result.added || 0;
+        state.lastCompletedAt = new Date(now()).toISOString();
+      } catch (error) {
+        state.error = error?.message || String(error);
+        state.lastCompletedAt = new Date(now()).toISOString();
+      } finally {
+        state.running = false;
+      }
+      return this.getState();
+    },
+  };
+}
+
 function json(res, statusCode, body) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -319,12 +395,50 @@ async function serveStatic(req, res, rootDir) {
   }
 }
 
-export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = createGiteeSearchService() } = {}) {
+export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = createGiteeSearchService(), historyStore = null, historyCollector = null } = {}) {
   return createServer(async (req, res) => {
     try {
       const requestUrl = new URL(req.url || '/', 'http://localhost');
       if (req.method === 'GET' && requestUrl.pathname === '/api/health') {
-        json(res, 200, { status: 'ok', version: '0.2-B.2', giteeProxy: true, giteeMode: 'bounded-fallback' });
+        json(res, 200, { status: 'ok', version: '0.3-A', giteeProxy: true, giteeMode: 'bounded-fallback', history: Boolean(historyStore), historyCollector: historyCollector?.getState?.() || null });
+        return;
+      }
+      if (req.method === 'GET' && requestUrl.pathname === '/api/history/status') {
+        if (!historyStore) {
+          json(res, 503, { enabled: false, error: 'History store is not configured' });
+          return;
+        }
+        json(res, 200, { ...(await historyStore.status()), collector: historyCollector?.getState?.() || null });
+        return;
+      }
+      if (req.method === 'GET' && requestUrl.pathname === '/api/history/growth') {
+        if (!historyStore) {
+          json(res, 503, { error: 'History store is not configured' });
+          return;
+        }
+        const ids = (requestUrl.searchParams.get('ids') || '').split(',').map((value) => value.trim()).filter(Boolean);
+        json(res, 200, await historyStore.growth(ids));
+        return;
+      }
+      if (req.method === 'POST' && requestUrl.pathname === '/api/history/capture') {
+        if (!historyStore) {
+          json(res, 503, { error: 'History store is not configured' });
+          return;
+        }
+        try {
+          const body = await readJsonBody(req);
+          json(res, 200, await historyStore.capture(body.projects, { source: body.source || 'browser-radar' }));
+        } catch (error) {
+          json(res, 400, { error: error?.message || 'Invalid history capture body' });
+        }
+        return;
+      }
+      if (req.method === 'POST' && requestUrl.pathname === '/api/history/collect') {
+        if (!historyCollector) {
+          json(res, 503, { error: 'History collector is not configured' });
+          return;
+        }
+        json(res, 200, await historyCollector.collect('manual'));
         return;
       }
       if (req.method === 'GET' && requestUrl.pathname === '/api/gitee/search') {
@@ -353,24 +467,47 @@ export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = create
 
 const entryPath = process.argv[1] ? resolve(process.argv[1]) : '';
 if (entryPath && pathToFileURL(entryPath).href === import.meta.url) {
-  const server = createOpenRadarServer();
-  server.on('error', (error) => {
-    console.error('');
-    if (error?.code === 'EADDRINUSE') {
-      console.error(`  无法启动：端口 ${DEFAULT_PORT} 已被占用。`);
-      console.error('  请先关闭旧的OpenRadar终端，或在旧终端按 Ctrl + C，再重新运行。');
-    } else {
-      console.error(`  OpenRadar启动失败：${error?.message || error}`);
-    }
-    console.error('');
+  const startOpenRadar = async () => {
+    const historyStore = new HistoryStore(resolve(ROOT_DIR, 'data/history.json'));
+    await historyStore.init();
+    const historyCollector = createHistoryCollector({ historyStore });
+    const server = createOpenRadarServer({ historyStore, historyCollector });
+    server.on('error', (error) => {
+      console.error('');
+      if (error?.code === 'EADDRINUSE') {
+        console.error(`  无法启动：端口 ${DEFAULT_PORT} 已被占用。`);
+        console.error('  请先关闭旧的OpenRadar终端，或在旧终端按 Ctrl + C，再重新运行。');
+      } else {
+        console.error(`  OpenRadar启动失败：${error?.message || error}`);
+      }
+      console.error('');
+      process.exitCode = 1;
+    });
+    server.listen(DEFAULT_PORT, '127.0.0.1', () => {
+      console.log('');
+      console.log('  OpenRadar Phase 0.3-A');
+      console.log(`  Local: http://localhost:${DEFAULT_PORT}`);
+      console.log('  Gitee: 有止损兼容通道（v5 → 官方搜索 → 首页探索 → 外部搜索）');
+      console.log('  History: 本地快照已启用（启动即采集，之后每6小时采集五个平台）');
+      console.log('  按 Ctrl + C 停止服务器。');
+      console.log('');
+      if (process.env.OPENRADAR_AUTO_COLLECT !== '0') {
+        historyCollector.collect('startup').then((result) => {
+          console.log(`[History] startup projects=${result.lastProjectCount} added=${result.lastAddedSamples}`);
+        }).catch((error) => console.error(`[History] startup failed: ${error?.message || error}`));
+        const timer = setInterval(() => {
+          historyCollector.collect('scheduled').then((result) => {
+            console.log(`[History] scheduled projects=${result.lastProjectCount} added=${result.lastAddedSamples}`);
+          }).catch((error) => console.error(`[History] scheduled failed: ${error?.message || error}`));
+        }, HISTORY_INTERVAL);
+        timer.unref();
+      } else {
+        console.log('  History: 自动采集已通过 OPENRADAR_AUTO_COLLECT=0 暂停。');
+      }
+    });
+  };
+  startOpenRadar().catch((error) => {
+    console.error(`OpenRadar启动失败：${error?.message || error}`);
     process.exitCode = 1;
-  });
-  server.listen(DEFAULT_PORT, '127.0.0.1', () => {
-    console.log('');
-    console.log('  OpenRadar Phase 0.2-B.2');
-    console.log(`  Local: http://localhost:${DEFAULT_PORT}`);
-    console.log('  Gitee: 有止损兼容通道（v5 → 官方搜索 → 首页探索 → 外部搜索）');
-    console.log('  按 Ctrl + C 停止服务器。');
-    console.log('');
   });
 }

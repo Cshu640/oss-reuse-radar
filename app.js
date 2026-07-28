@@ -1,7 +1,15 @@
 import { platformCatalog, platformIds, radarPlatform, searchPlatform } from './platform-adapters.js';
 
 const FAVORITES_KEY = 'openradar:favorites:v1';
-const RADAR_CACHE_KEY = 'openradar:radar-cache:v5';
+const RADAR_CACHE_KEY = 'openradar:radar-cache:v6';
+const HISTORY_PERIOD_MAP = { today: 'day', week: 'week', month: 'month' };
+const HISTORY_TARGET_HOURS = { day: 24, week: 168, month: 720 };
+const HISTORY_COPY = {
+  today: ['24小时增长', '仅在历史基线达到约20小时后显示真实增长；此前明确标记为积累中。'],
+  week: ['7天增长', '仅在历史基线达到约6天后显示真实增长；不同平台按各自主指标计算。'],
+  month: ['30天增长', '仅在历史基线达到约25天后显示真实增长；不会混同比较Star、Like与Downloads。'],
+  rising: ['低 Star 高潜力', '这是代理潜力排序，不等于真实增长；适合寻找尚未变成大热门的新项目。'],
+};
 const RADAR_CACHE_TTL = 15 * 60 * 1000;
 
 const categories = [
@@ -155,6 +163,9 @@ const state = {
   lastSearchPlan: null,
   sourceStatus: {},
   searchSourceStatus: {},
+  growth: {},
+  historyStatus: null,
+  historyAvailable: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -293,6 +304,54 @@ function metricValue(project, field) {
   return Number(project?.[field] || 0);
 }
 
+function growthPeriod(project, periodId = HISTORY_PERIOD_MAP[state.period]) {
+  if (!periodId) return null;
+  return state.growth[project.id]?.periods?.[periodId] || null;
+}
+
+function growthDelta(project, periodId = HISTORY_PERIOD_MAP[state.period]) {
+  const period = growthPeriod(project, periodId);
+  const meta = platformMeta(project);
+  return period?.ready ? Number(period.deltas?.[meta.primaryField] || 0) : null;
+}
+
+function growthPercentile(project, periodId) {
+  const delta = growthDelta(project, periodId);
+  if (delta === null) return null;
+  const peers = state.projects
+    .filter((candidate) => candidate.platform === project.platform)
+    .map((candidate) => growthDelta(candidate, periodId))
+    .filter((value) => value !== null)
+    .sort((a, b) => a - b);
+  if (!peers.length) return 0;
+  const belowOrEqual = peers.filter((value) => value <= delta).length;
+  return belowOrEqual / peers.length;
+}
+
+function formatDurationHours(hours = 0) {
+  if (hours >= 24 * 20) return `${Math.round(hours / 24)}天`;
+  if (hours >= 24) return `${Math.round(hours / 24 * 10) / 10}天`;
+  return `${Math.max(0, Math.floor(hours))}小时`;
+}
+
+function growthBadge(project) {
+  const periodId = HISTORY_PERIOD_MAP[state.period];
+  if (!periodId) return '';
+  if (!state.historyAvailable) return '<div class="growth-line pending"><b>历史未启用</b><span>请使用本地服务器启动</span></div>';
+  if (!state.growth[project.id]) return '<div class="growth-line pending"><b>尚未追踪</b><span>进入候选池后开始积累</span></div>';
+  const period = growthPeriod(project, periodId);
+  const meta = platformMeta(project);
+  const targetHours = HISTORY_TARGET_HOURS[periodId];
+  if (period?.ready) {
+    const delta = Number(period.deltas?.[meta.primaryField] || 0);
+    const sign = delta > 0 ? '+' : '';
+    const tone = delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral';
+    return `<div class="growth-line ${tone}"><b>${sign}${formatNumber(delta)}</b><span>${escapeHtml(meta.primaryLabel)} · 实际覆盖${escapeHtml(formatDurationHours(period.coveredHours))}</span></div>`;
+  }
+  const covered = Math.min(targetHours, Math.max(0, period?.coveredHours || state.historyStatus?.historyAgeHours || 0));
+  return `<div class="growth-line pending"><b>积累中</b><span>${escapeHtml(formatDurationHours(covered))} / ${escapeHtml(formatDurationHours(targetHours))}</span></div>`;
+}
+
 function projectPopularity(project) {
   const meta = platformMeta(project);
   return metricValue(project, meta.primaryField);
@@ -329,7 +388,7 @@ function toast(message) {
   toast.timer = setTimeout(() => els.toast.classList.remove('show'), 2200);
 }
 
-function projectCard(project, saved = false) {
+function projectCard(project, saved = false, showGrowth = false) {
   const favorite = favoriteById(project.id);
   const meta = platformMeta(project);
   const popularity = metricValue(project, meta.primaryField);
@@ -364,6 +423,7 @@ function projectCard(project, saved = false) {
     </div>
     <div class="use-types">${useBadges}</div>
     ${savedTags}${savedAction}${savedNote}
+    ${showGrowth ? growthBadge(project) : ''}
     <div class="stats">
       <div class="stat"><b>${formatNumber(popularity)}</b><span>${escapeHtml(meta.primaryLabel)}</span></div>
       <div class="stat"><b>${formatNumber(secondary)}</b><span>${escapeHtml(meta.secondaryLabel)}</span></div>
@@ -408,19 +468,40 @@ function filteredProjects() {
   if (els.license.value === 'unknown') projects = projects.filter((project) => !project.license || /待核查|unknown|other/i.test(project.license));
   if (els.useType.value !== 'all') projects = projects.filter((project) => inferUseTypes(project).includes(els.useType.value));
 
+  const historicalSorter = (periodId) => (a, b) => {
+    const aPercentile = growthPercentile(a, periodId);
+    const bPercentile = growthPercentile(b, periodId);
+    if (aPercentile !== null || bPercentile !== null) {
+      if (aPercentile === null) return 1;
+      if (bPercentile === null) return -1;
+      if (bPercentile !== aPercentile) return bPercentile - aPercentile;
+      if (a.platform === b.platform) {
+        const aDelta = growthDelta(a, periodId);
+        const bDelta = growthDelta(b, periodId);
+        if (bDelta !== aDelta) return bDelta - aDelta;
+      }
+    }
+    return potentialScore(b) - potentialScore(a);
+  };
   const sorters = {
-    today: (a, b) => potentialScore(b) - potentialScore(a),
-    week: (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt),
-    month: (a, b) => projectPopularity(b) - projectPopularity(a),
+    today: historicalSorter('day'),
+    week: historicalSorter('week'),
+    month: historicalSorter('month'),
     rising: (a, b) => potentialScore(b) / Math.log10(projectPopularity(b) + 10) - potentialScore(a) / Math.log10(projectPopularity(a) + 10),
   };
   return projects.sort(sorters[state.period]);
 }
 
 function renderRadar() {
+  const [title, description] = HISTORY_COPY[state.period] || HISTORY_COPY.today;
+  els.radarTitle.textContent = title;
+  const historySuffix = state.historyAvailable
+    ? ` 本地历史：${state.historyStatus?.projectCount || 0}个项目、${state.historyStatus?.sampleCount || 0}条样本。`
+    : ' 需使用 node server.mjs 才能保存真实历史。';
+  els.radarDesc.textContent = `${description}${historySuffix}`;
   const projects = filteredProjects();
   els.projectGrid.innerHTML = projects.length
-    ? projects.map((project) => projectCard(project)).join('')
+    ? projects.map((project) => projectCard(project, false, true)).join('')
     : '<div class="empty"><h3>没有符合条件的项目</h3><p>可以切换分类、用途或许可证筛选。</p></div>';
   els.candidateMetric.textContent = state.projects.length;
   els.freshMetric.textContent = state.projects.filter((project) => projectAgeDays(project) <= 30).length;
@@ -435,7 +516,7 @@ function renderFavorites() {
     .filter((favorite) => selectedTag === 'all' || favorite.tags?.includes(selectedTag));
 
   els.favoriteEmpty.hidden = Boolean(favorites.length);
-  els.favoriteGrid.innerHTML = favorites.map((project) => projectCard(project, true)).join('');
+  els.favoriteGrid.innerHTML = favorites.map((project) => projectCard(project, true, true)).join('');
 
   const tags = [...new Set(state.favorites.flatMap((favorite) => favorite.tags || []))].sort();
   const currentTag = els.tagFilter.value;
@@ -505,6 +586,57 @@ function renderSourceHealth(target, statuses) {
   }).join('');
 }
 
+async function fetchJsonSafe(url, options = {}) {
+  const response = await fetch(url, options);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
+function renderHistoryStatus() {
+  const status = state.historyStatus || {};
+  if (els.historyProjectCount) els.historyProjectCount.textContent = status.projectCount ?? '—';
+  if (els.historySampleCount) els.historySampleCount.textContent = status.sampleCount ?? '—';
+  if (els.historyFirst) els.historyFirst.textContent = status.firstCapturedAt ? timeAgo(status.firstCapturedAt) : '尚未开始';
+  if (els.historyLast) els.historyLast.textContent = status.lastCapturedAt ? timeAgo(status.lastCapturedAt) : '尚未采集';
+  if (els.historyMode) els.historyMode.textContent = state.historyAvailable ? '本地JSON · 每6小时' : '未启用';
+  if (els.historyNote) {
+    const collector = status.collector || {};
+    const readiness = status.readiness || {};
+    const readyLabels = [readiness.day && '24小时', readiness.week && '7天', readiness.month && '30天'].filter(Boolean);
+    els.historyNote.textContent = state.historyAvailable
+      ? `${collector.running ? '后台采集中。' : '后台待命。'}${readyLabels.length ? ` 已具备${readyLabels.join('、')}真实增长基线。` : ' 首次运行后需要等待时间积累，不能立即生成历史涨幅。'} 本地服务器关闭期间不会自动采集。`
+      : '当前为静态模式，不会保存历史。请使用 node server.mjs 或 start-openradar.cmd 启动。';
+  }
+}
+
+async function loadHistoryGrowth(projects, capture = false) {
+  const trackable = dedupeProjects(projects).filter((project) => project.platform !== 'gitee').slice(0, 400);
+  if (!trackable.length) return;
+  try {
+    if (capture) {
+      await fetchJsonSafe('/api/history/capture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projects: trackable, source: 'browser-radar' }),
+      });
+    }
+    const chunks = [];
+    for (let index = 0; index < trackable.length; index += 50) chunks.push(trackable.slice(index, index + 50));
+    const responses = await Promise.all(chunks.map((chunk) => fetchJsonSafe(`/api/history/growth?ids=${encodeURIComponent(chunk.map((project) => project.id).join(','))}`)));
+    state.growth = Object.assign({}, ...responses.map((response) => response.projects || {}));
+    state.historyStatus = responses.at(-1)?.status || await fetchJsonSafe('/api/history/status');
+    const statusWithCollector = await fetchJsonSafe('/api/history/status');
+    state.historyStatus = statusWithCollector;
+    state.historyAvailable = true;
+  } catch {
+    state.historyAvailable = false;
+    state.growth = {};
+    state.historyStatus = null;
+  }
+  renderHistoryStatus();
+  renderRadar();
+}
+
 async function radar(force = false) {
   if (!force) {
     const cached = loadRadarCache();
@@ -515,6 +647,7 @@ async function radar(force = false) {
       els.status.className = 'live';
       renderSourceHealth(els.sourceHealth, state.sourceStatus);
       renderRadar();
+      void loadHistoryGrowth(state.projects, false);
       return;
     }
   }
@@ -561,6 +694,7 @@ async function radar(force = false) {
   els.status.className = liveProjects.length ? (failedCount ? 'warn' : 'live') : 'warn';
   renderSourceHealth(els.sourceHealth, state.sourceStatus);
   renderRadar();
+  void loadHistoryGrowth(liveProjects.length ? liveProjects : state.projects, Boolean(liveProjects.length));
 }
 
 function dedupeProjects(projects) {
@@ -710,7 +844,7 @@ async function detectRuntimeMode() {
     if (!health.giteeProxy) throw new Error('兼容通道未启用');
     els.runtimeMode.textContent = '● 本地兼容服务';
     els.runtimeMode.className = 'runtime-live';
-    els.runtimeDetail.textContent = '五平台实时 · Gitee有止损兼容通道';
+    els.runtimeDetail.textContent = '五平台实时 · Gitee受限 · 本地历史';
   } catch {
     els.runtimeMode.textContent = '● 静态模式';
     els.runtimeMode.className = 'runtime-warn';
@@ -808,6 +942,27 @@ function init() {
     URL.revokeObjectURL(url);
   };
 
+  if (els.collectHistory) {
+    els.collectHistory.onclick = async () => {
+      els.collectHistory.disabled = true;
+      els.collectHistory.textContent = '采集中…';
+      try {
+        await fetchJsonSafe('/api/history/collect', { method: 'POST' });
+        const status = await fetchJsonSafe('/api/history/status');
+        state.historyStatus = status;
+        state.historyAvailable = true;
+        renderHistoryStatus();
+        await loadHistoryGrowth(state.projects, false);
+        toast('历史快照采集完成');
+      } catch (error) {
+        toast(`历史采集失败：${readableError(error)}`);
+      } finally {
+        els.collectHistory.disabled = false;
+        els.collectHistory.textContent = '立即采集一次';
+      }
+    };
+  }
+
   els.clear.onclick = () => {
     if (state.favorites.length && confirm('确定清空全部收藏吗？')) {
       state.favorites = [];
@@ -831,6 +986,7 @@ function init() {
   };
 
   updateCounters();
+  renderHistoryStatus();
   radar(false);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
 }

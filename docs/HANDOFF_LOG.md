@@ -68,3 +68,18 @@
 - 测试：JS语法、Manifest、diff、HTTP静态资源、六平台桌面模拟、390px移动端、中文扩展、中文平台原始查询、六种返回结构与收藏键均通过；真实外部API与用户Windows未执行。
 - 下一项唯一任务：用户Windows Edge逐项验证六个平台首页和搜索状态，只修复API/CORS/字段兼容缺陷，验收前不进入历史快照。
 - 关键文件：`platform-adapters.js`、`app.js`、`index.html`、`styles.css`、`sw.js`、`tests/browser_mock_test.py`、`README.md`、`HANDOFF.md`、`docs/PROJECT_STATE.json`、`docs/HANDOFF_LOG.md`。
+
+## 2026-07-28 — Phase 0.2-B user acceptance
+- 当前阶段：Phase 0.2-B — Multi-Platform Public API Adapters
+- 分支：`phase-0.2-b-multi-platform-adapters`
+- HEAD：`0ddfffe`（本验收记录提交前）
+- 状态：用户已在 Windows Edge 真实环境验证首页平台扫描。GitHub、Hugging Face、GitLab、Codeberg、ModelScope 均成功返回真实数据；Gitee 显示“不可用”。Phase 0.2-B 作为五平台实时雷达验收通过，但六平台目标存在一项已知适配器失败。
+- 已完成：五个平台真实API/CORS与字段结构验收；平台状态数量显示；单源失败隔离。
+- 未完成：Gitee 浏览器兼容；跨平台身份去重；历史快照与真实增长；软件包生态；云收藏；MCP；生产部署。
+- 当前阻塞：Gitee 浏览器直连公开搜索接口不可用，可能涉及CORS或公开搜索端点稳定性。
+- 禁止事项：不得将五平台通过写成六平台全部通过；不得把代理潜力分描述为真实涨幅；不得加入付费API或在前端暴露访问令牌。
+- 已知问题和风险：Gitee v5仓库搜索存在公开缺陷反馈，单纯增加令牌也未必解决；备用通道需要限频、缓存和明确来源标识。
+- 工作区/暂存/提交/标签/推送/合并：working tree dirty（验收交接）；staged none；HEAD `0ddfffe`；tags none；not pushed；merge none。
+- 测试：用户Windows Edge真实结果——GitHub 48、Hugging Face 18、GitLab 18、Codeberg 18、ModelScope 18、Gitee不可用。
+- 下一项唯一任务：Phase 0.2-B.1 增加本地同源Gitee兼容代理，优先调用官方v5 API，失败或空结果时低频回退到Gitee官方搜索页面，并保持零付费API。
+- 关键文件：`platform-adapters.js`、计划新增 `server.mjs`、`app.js`、`README.md`、交接文件。

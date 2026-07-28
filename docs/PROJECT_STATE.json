@@ -1,9 +1,9 @@
 {
   "phase": "0.2-B",
-  "status": "code_complete_local_mock_verified_user_unverified",
+  "status": "user_verified_with_one_adapter_failure",
   "branch": "phase-0.2-b-multi-platform-adapters",
-  "head": "ceb75c5",
-  "working_tree": "dirty_handoff_updates_only",
+  "head": "0ddfffe",
+  "working_tree": "dirty_final_status_pointer_only",
   "completed": [
     "Unified platform adapter layer",
     "GitHub adapter",
@@ -22,10 +22,16 @@
     "Radar cache v3",
     "Favorites v1 storage compatibility",
     "Service worker cache v3",
-    "Repeatable Chromium mock browser test"
+    "Repeatable Chromium mock browser test",
+    "User Windows validation: GitHub live",
+    "User Windows validation: Hugging Face live",
+    "User Windows validation: GitLab live",
+    "User Windows validation: Codeberg live",
+    "User Windows validation: ModelScope live",
+    "Per-source failure isolation verified"
   ],
   "not_completed": [
-    "User Windows validation of real six-platform APIs and CORS",
+    "Gitee browser-compatible public search path",
     "Gitee and ModelScope stability acceptance",
     "Cross-platform repository identity deduplication",
     "Historical snapshot database",
@@ -37,8 +43,7 @@
     "Production deployment"
   ],
   "blocked_by": [
-    "Development container cannot validate real external platform APIs or CORS",
-    "User Windows Edge Phase 0.2-B acceptance"
+    "Gitee browser direct public-search endpoint unavailable in user Windows Edge"
   ],
   "tests": [
     "node --check app.js: passed",
@@ -54,7 +59,8 @@
     "Gitee and ModelScope original Chinese query URL assertions: passed",
     "favorites storage key compatibility: passed",
     "real external APIs in development container: not run",
-    "user Windows Edge Phase 0.2-B: not run"
+    "user Windows Edge Phase 0.2-B: not run",
+    "user Windows Edge: GitHub 48, Hugging Face 18, GitLab 18, Codeberg 18, ModelScope 18, Gitee unavailable"
   ],
-  "next_task": "Validate all six real platform sources in the user Windows Edge browser and fix only API CORS or response-schema compatibility defects before starting historical snapshots."
+  "next_task": "Implement Phase 0.2-B.1 same-origin local Gitee compatibility proxy with official API first and official Gitee Search fallback, zero paid APIs."
 }

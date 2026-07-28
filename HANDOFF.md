@@ -6,10 +6,10 @@ Phase 0.2-B — Multi-Platform Public API Adapters
 ## 分支和 HEAD
 - Branch：`phase-0.2-b-multi-platform-adapters`
 - Functional HEAD：`ceb75c5`
-- 当前 HEAD：交接提交后需再次同步
+- 当前 HEAD：`0ddfffe`（交接提交；当前文件的最终状态指针尚未提交）
 
 ## 当前状态
-Phase 0.2-B 功能代码已完成：OpenRadar 已建立统一平台适配器，并在 GitHub、Hugging Face 基础上增加 GitLab、Codeberg、Gitee 与 ModelScope。六个平台均使用免费公开读取，不在前端放置令牌或服务密钥。桌面与移动端模拟浏览器测试通过，但开发容器无法完成真实外部 API/CORS 验证；Gitee 与 ModelScope 继续显示“实验”标识，不得将本阶段写成用户验收通过。
+用户已在 Windows Edge 完成真实验收：GitHub、Hugging Face、GitLab、Codeberg、ModelScope 均成功返回数据；Gitee 显示不可用。Phase 0.2-B 已作为五平台实时雷达验收通过，但六平台目标仍有一项适配器失败。ModelScope 可移除实验状态；Gitee 继续保持实验与降级提示。
 
 ## 已完成
 - 新建 `platform-adapters.js`，集中管理平台元数据、请求超时、搜索、首页雷达、返回结构标准化和备用搜索链接
@@ -29,8 +29,7 @@ Phase 0.2-B 功能代码已完成：OpenRadar 已建立统一平台适配器，�
 - README 与 Agent 约束同步更新
 
 ## 未完成
-- 用户 Windows Edge 对六个平台真实接口、CORS、返回结构和降级提示的人工验收
-- Gitee、ModelScope 稳定性结论；两者仍为实验数据源
+- Gitee 浏览器兼容与稳定性结论；Gitee仍为实验数据源
 - GitLab/Codeberg 返回项目的语言和许可证深度补全
 - 跨平台同项目身份去重；当前只按平台内标准 ID 去重
 - 历史快照数据库及真实24小时/7天/30天增速
@@ -41,15 +40,13 @@ Phase 0.2-B 功能代码已完成：OpenRadar 已建立统一平台适配器，�
 - 生产部署
 
 ## 当前阻塞
-- 开发容器无法解析或访问真实外部平台，因此不能验证六个平台在真实浏览器中的公开 API 与 CORS 行为
-- 容器 Chromium 对 localhost 导航返回 `ERR_BLOCKED_BY_ADMINISTRATOR`，因此真实模块页面仅完成 HTTP 冒烟测试；交互验证使用内联页面与模拟 API
-- 需要用户在 Windows Edge 中运行新版并提供六个平台状态截图，才能完成 Phase 0.2-B 验收
+- Gitee 浏览器直连公开搜索接口在用户Windows Edge不可用；需要本地同源代理或其他零成本备用通道
 
 ## 禁止事项
 - 不得把代理潜力分描述成真实涨幅
 - 不得把各平台 Star、Like、Downloads 原始数字直接描述成同口径全网排名
 - 不得把模拟 API 测试通过描述成真实外部 API 通过
-- Gitee 与 ModelScope 在用户真实验收前不得移除“实验”标识
+- Gitee在兼容修复完成并经用户真实验收前不得移除“实验”标识
 - 不得在前端加入 GitHub Token、Supabase service role key、平台私钥或模型密钥
 - 不得更换 `openradar:favorites:v1` 而不提供迁移
 - 第一版不得加入付费 API
@@ -79,18 +76,19 @@ Phase 0.2-B 功能代码已完成：OpenRadar 已建立统一平台适配器，�
 - 六种平台返回结构标准化：模拟测试通过
 - 收藏存储键静态兼容：`openradar:favorites:v1` 保持不变
 - 真实外部 API：未在开发容器验证
-- 用户 Windows Edge：未验收 Phase 0.2-B
+- 用户 Windows Edge：GitHub 48、Hugging Face 18、GitLab 18、Codeberg 18、ModelScope 18；Gitee不可用
 
 ## Git 状态
-- Working tree：交接更新前 clean；交接文件写入后 dirty
+- Working tree：dirty，仅 `HANDOFF.md` 与 `docs/PROJECT_STATE.json` 的最终 HEAD/状态指针
 - Staged：none
+- Current commit：`0ddfffe docs: record phase 0.2-b handoff`
 - Functional commit：`ceb75c5 feat: add six-platform source adapters`
 - Tags：none
 - Push：not pushed；origin 仍指向本地 Phase 0.1 bundle
 - Merge：none
 
 ## 下一项唯一任务
-在用户 Windows Edge 更新并运行 Phase 0.2-B，逐项验证首页与灵感搜索中的 GitHub、Hugging Face、GitLab、Codeberg、Gitee、ModelScope 状态；只修复真实 API、CORS 或字段兼容问题，验收前不得进入历史快照开发。
+Phase 0.2-B.1：增加本地同源 Gitee 兼容代理，优先调用官方 v5 API，失败或空结果时低频回退到 Gitee 官方搜索页面；保持零付费 API，并只修复 Gitee，不进入历史快照开发。
 
 ## 关键文件
 - `platform-adapters.js`：六平台目录、调用、标准化与降级入口

@@ -209,3 +209,33 @@
 - 测试：全部JS/MJS语法；历史回归；insight store/service；Ollama状态/Schema/缓存/强制生成/离线降级；Insights HTTP；桌面弹窗；390px移动端；实际8098启动、health、insight status、规则降级与首页HTTP均通过；用户Windows真实模型未执行。
 - 下一项唯一任务：用户Windows运行Phase 0.3-B，确认Ollama状态，分别生成一个GitHub和一个Hugging Face或ModelScope项目中文解读，确认`data/insights.json`写入和缓存复用；只修真实兼容缺陷。
 - 关键文件：`insight-store.mjs`、`insight-service.mjs`、`server.mjs`、`app.js`、`index.html`、`styles.css`、三套测试与交接文件。
+
+## 2026-07-29 — Phase 0.3-B user acceptance
+- 当前阶段：Phase 0.3-B — Local Chinese Plain-Language Insights
+- 分支：`phase-0.3-b-local-insights`
+- HEAD：`2b632aa`（用户使用的已打包版本）
+- 状态：用户明确反馈“完美，全部验收通过”。Windows真实Ollama、`qwen3:4b`中文解读、规则降级、`data/insights.json`缓存、历史与收藏兼容均验收通过。
+- 已完成：真实本地模型连接；中文大白话生成；个人适配分析；缓存写入与复用；历史和收藏回归。
+- 未完成：跨平台身份去重；统一详情；Codex研究任务；自然时间7天/30天增长；云端采集。
+- 当前阻塞：无，Phase 0.3-B已验收；历史长期周期仍需自然时间。
+- 禁止事项：不得把Phase 0.3-B验收扩大为后续未开发功能通过；不得伪造长期增长。
+- 已知问题和风险：AI解读仍需按项目人工复核，尤其许可证、硬件和成熟度。
+- 工作区/暂存/提交/标签/推送/合并：用户机器Git状态未检查；开发版本HEAD `2b632aa`；tags none；not pushed；merge none。
+- 测试：用户Windows Edge、Ollama与qwen3:4b人工验收通过。
+- 下一项唯一任务：Phase 0.3-C跨平台去重、统一项目详情与Codex研究任务生成。
+- 关键文件：`insight-service.mjs`、`insight-store.mjs`、`server.mjs`、`app.js`、`data/insights.json`。
+
+## 2026-07-29 — Phase 0.3-C cross-platform identity, unified details and Codex packets
+- 当前阶段：Phase 0.3-C — Cross-Platform Identity, Unified Details & Codex Research Packets
+- 分支：`phase-0.3-c-dedup-details-codex`
+- Functional HEAD：`2c70561`
+- 当前状态：功能代码完成；身份、导出、服务器、历史/Insights回归、桌面/移动模拟浏览器和实际Node本地文件写入测试通过；用户Windows未验收。
+- 已完成：保守身份信号；同作者/项目名和显式互链合并；同名不同作者隔离；全部原始来源保留；实体/重复来源统计；平台筛选、收藏、Insight和历史兼容；统一详情页；每来源指标/许可证/增长；Codex Markdown与JSON研究包；本地API；浏览器降级；研究任务强制只研究不集成和完整交接。
+- 未完成：Windows真实项目去重和详情验收；真实Codex研究包文件验收；自动启动Codex/MCP；人工拆分合并；项目家族图谱；自动数据迁移；云采集；软件包和外部信号；自然时间7天/30天验收。
+- 当前阻塞：需要用户Windows真实接口与文件系统验证；跨平台无统一全局ID会导致保守规则漏合并。
+- 禁止事项：不得仅靠名称或语义相似合并；不得丢原来源；不得称研究包等于Codex已研究；不得自动启动或消耗Codex额度；不得提交运行数据；不得破坏收藏/历史/Insights。
+- 已知问题和风险：少量同作者同名项目仍可能误合并；组织迁移和不同命名配套项目会漏合并；Hash详情不是公网永久链接；研究包仍需用户粘贴到Codex；升级需手工复制历史和Insights数据。
+- 工作区/暂存/提交/标签/推送/合并：功能提交后clean；写README、AGENTS和交接后dirty；staged none；functional commit `2c70561`；tags none；not pushed，origin为本地Phase 0.3-A bundle；merge none。
+- 测试：全部语法与Manifest；history/insight回归；身份单测；Codex导出单测；server API；8来源合并6实体；3来源详情；Codex复制；390px移动端；实际8099启动、health、status、文件写入与首页HTTP均通过；用户Windows未执行。
+- 下一项唯一任务：用户迁移旧`data/history.json`和`data/insights.json`，在Windows启动Phase 0.3-C，验收真实多来源项目、统一详情和`exports/codex`两个研究文件；只修真实兼容问题。
+- 关键文件：`project-identity.js`、`codex-packet.js`、`codex-export-service.mjs`、`server.mjs`、`app.js`、`platform-adapters.js`、`index.html`、`styles.css`、`tests/project_identity_test.mjs`、`tests/codex_export_test.mjs`、交接文件。

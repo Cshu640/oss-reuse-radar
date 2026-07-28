@@ -1,174 +1,181 @@
 # OpenRadar Handoff
 
 ## 当前阶段
-Phase 0.3-B — Local Chinese Plain-Language Insights
+Phase 0.3-C — Cross-Platform Identity, Unified Details & Codex Research Packets
 
 ## 分支和 HEAD
-- Branch：`phase-0.3-b-local-insights`
-- Functional HEAD：`0812d3d`
-- 当前 HEAD：交接提交后需再次同步
+- Branch：`phase-0.3-c-dedup-details-codex`
+- Functional HEAD：`2c70561`
+- 当前 HEAD：交接提交后需再次同步最终状态指针
 
 ## 当前状态
-Phase 0.3-B功能代码已经完成。OpenRadar现在为每个项目卡提供不调用模型的中文规则摘要；用户点击“中文解读”后，本地Node服务会检测Windows后台Ollama与`qwen3:4b`，按需读取安全范围内的公开README节选，通过结构化JSON生成完整中文分析，并保存到`data/insights.json`。项目相关元数据未变化时直接读取缓存，不重复占用GPU。
+Phase 0.3-C功能代码已经完成。用户已在Windows真实环境确认Phase 0.3-B“全部验收通过”，因此本地Ollama、`qwen3:4b`中文解读、缓存复用、历史快照和收藏兼容均可作为已验收基线；Phase 0.3-C仍未在用户Windows验收。
 
-本地AI采用串行队列，一次只生成一个项目；请求使用`stream: false`、`think: false`、低温度、4096上下文，并通过`keep_alive: 0`在生成后立即释放模型。Ollama未运行、模型缺失或生成失败时，项目仍显示规则摘要，不影响雷达、收藏和历史快照。
+本阶段新增保守型跨平台项目身份图谱。OpenRadar会在同作者/组织与项目名完全一致、项目显式互相链接或共享规范项目URL时合并来源；仅名称、简介、Topic或技术栈相似不会自动合并。合并实体保留全部原始来源、平台指标、许可证和历史ID，主来源按平台优先级与元数据质量选择。
 
-Phase 0.3-A已由用户在Windows确认“都可以用了”，因此本地历史运行链路已获用户验收；但真实24小时、7天和30天增长仍需自然时间，不能提前标记完成。
+项目卡可进入独立统一详情页，展示统一中文情报、全部平台来源、每个来源的指标和历史状态、许可证差异、用途类型及合并原因。收藏键仍为`openradar:favorites:v1`，历史与解读缓存仍通过原始项目ID兼容。
 
-Phase 0.3-B已通过本地单元、HTTP、实际Node启动、离线降级与模拟浏览器测试，但尚未在用户Windows真实调用`qwen3:4b`，不得写成用户验收通过。
+详情页新增“一键交给Codex研究”。当前实现会生成、保存并复制一份研究任务，而不会自动启动Codex、选择仓库、运行命令或消耗额度。本地Node模式将文件写入`exports/codex/<时间-项目名>/RESEARCH_TASK.md`和`project-context.json`；静态模式仅在浏览器生成并复制Markdown。任务强制要求只研究不集成、读取项目交接、检查Git、核验身份/许可证/维护/安全/运行门槛/替代方案，并在结束时更新机器可读交接。
+
+本阶段已通过身份合并、Codex导出、服务器API、现有历史/Insights回归、桌面详情页、390px移动端、实际Node启动与真实文件写入测试，但用户Windows尚未验收，不得写成Phase 0.3-C已验收。
 
 ## 已完成
-- 每个项目卡自动显示免费规则中文摘要
-- “适配分析”按钮改为“中文解读”
-- 中文解读大弹窗
-- 结构化字段：用途、适合人群、接入方式、商业许可、运行门槛、Codex价值、用户适配、风险、建议
-- `insight-store.mjs`零依赖本地缓存
-- 本地缓存文件`data/insights.json`
-- 缓存原子写入
-- 项目元数据SHA-256指纹
-- 项目未更新时复用AI缓存
-- 强制重新生成功能
-- `insight-service.mjs`
-- Ollama `GET /api/tags`状态与模型检测
-- 默认模型`qwen3:4b`
-- 本地API默认地址`http://127.0.0.1:11434`
-- Ollama结构化JSON Schema输出
-- `stream: false`
-- `think: false`
-- `temperature: 0`
-- `num_ctx: 4096`
-- `num_predict: 900`
-- `keep_alive: 0`
-- 单任务串行生成队列
-- README最多约7000字符
-- GitHub公开README读取
-- Hugging Face公开README读取
-- GitLab公开README尝试
-- Codeberg公开README尝试
-- Gitee与ModelScope公开README安全回退尝试
-- 无README时降低置信度
-- Ollama不可用时规则摘要降级
-- 观察名单页面增加Ollama与缓存状态
-- `GET /api/insights/status`
-- `GET /api/insights`
-- `POST /api/insights/generate`
-- Service Worker缓存升级到v7
-- 雷达缓存升级到v7
-- 收藏键继续保持`openradar:favorites:v1`
-- 历史文件schema和主链路未改动
+- `project-identity.js`跨平台身份信号和实体合并
+- 同作者/项目名强信号合并
+- 项目显式互链与共享规范URL合并
+- 仅同名不同作者禁止合并
+- GitHub优先的主来源选择与元数据质量排序
+- 每个实体保留aliases、sourceProjects、sourcePlatforms、licenseVariants、languages和dedupReasons
+- 首页显示项目实体数与已合并重复来源数
+- 搜索结果显示实体数量和合并来源数量
+- 平台筛选支持实体任一来源
+- 历史追踪继续使用全部原始来源ID
+- 中文解读缓存通过实体所有alias查找
+- 收藏通过实体重叠关系兼容旧项目ID
+- 项目卡多来源徽标与“已合并N个来源”
+- 独立统一项目详情页
+- 本地Hash详情路由
+- 各平台来源卡、指标、许可证和增长状态
+- 统一中文情报与现有Ollama解读复用
+- 详情页收藏、分享与中文解读入口
+- `codex-packet.js`研究任务和机器上下文生成
+- `codex-export-service.mjs`本地安全导出
+- `GET /api/codex/status`
+- `POST /api/codex/export`
+- `exports/codex/.gitkeep`与运行文件忽略规则
+- Codex研究任务自动复制和Markdown下载
+- 静态模式浏览器研究提示词降级
+- Codex任务强制研究、不集成、Git/交接/许可证/安全/替代方案审计
+- Service Worker缓存升级到v8
+- 雷达缓存升级到v8
+- README新增数据迁移说明
+- Phase 0.3-B用户验收事实记录
 
 ## 未完成
-- 用户Windows真实运行Phase 0.3-B
-- 用户确认页面显示“Ollama已连接 · 按需生成”
-- 用户使用真实`qwen3:4b`完成至少两个平台的解读
-- 用户确认`data/insights.json`真实创建并写入
-- 用户确认第二次打开同项目读取缓存而不重新生成
-- 真实README读取在各平台的成功率统计
-- AI解读人工编辑与纠错
-- 收藏项目可选批量生成
-- 自动前20名生成（当前明确不做，防止资源占用）
-- 自然时间24小时、7天、30天增长验收
-- 跨平台同项目身份去重
-- 历史与解读数据导出、备份和迁移
+- 用户Windows真实运行Phase 0.3-C
+- 用户确认真实项目卡出现跨平台合并
+- 用户确认统一详情页所有来源正确
+- 用户确认`exports/codex/`真实写入两个文件
+- 用户将研究任务粘贴到Codex后的可用性验收
+- 自动启动Codex或自动绑定当前仓库
+- Codex MCP Server
+- 去重人工拆分/合并纠错界面
+- 作者名变化、组织迁移、无互链镜像和模型配套仓库的进一步关联
+- 跨平台Fork、量化版、衍生版和同项目家族图谱
+- 历史与解读数据一键导出、导入和自动迁移
 - 云端无人值守采集
+- 收藏项目爆发提醒
 - ecosyste.ms、npm、PyPI等软件包生态
 - Hacker News等外部信号
-- Codex MCP Server
+- 自然时间7天和30天增长最终验收
 - 生产部署
 
 ## 当前阻塞
-- 需要用户Windows真实Ollama环境验证`qwen3:4b`结构化输出、生成速度和资源行为
-- 真实历史周期仍需要自然时间积累
+- Phase 0.3-C需要用户Windows Edge与本地Node真实验收
+- 跨平台身份没有统一官方全局ID，保守规则必然存在漏合并
+- 自然时间7天和30天榜仍需继续积累
 
 ## 禁止事项
-- 不得把本地模拟的Ollama返回写成用户真实生成通过
-- 不得自动批量生成全部项目
-- 不得并发调用多个本地模型任务
-- 不得把规则摘要标成AI摘要
-- 不得在README或元数据不足时编造安装、硬件、成熟度或许可证结论
-- 不得把AI许可证描述写成法律意见
-- 不得把代理潜力分写成真实增长
-- 不得在历史基线不足时显示伪造涨幅
+- 不得仅凭项目名称、简介、Topic、语言或热度自动合并
+- 不得将Fork、量化版、第三方镜像或配套模型强行当作同一项目
+- 不得丢弃任何原始来源ID、URL、指标、许可证或历史序列
+- 不得把去重结果描述成已人工确认的官方身份关系
+- 不得把生成研究任务写成Codex已经完成研究
+- 不得自动启动Codex、自动执行研究、选择仓库或消耗额度
+- 不得让Codex研究任务直接修改或集成当前项目
+- 不得提交或打包`exports/codex/*`运行文件
+- 不得提交或打包`data/history.json`和`data/insights.json`
+- 不得修改收藏键`openradar:favorites:v1`
+- 不得把代理潜力分描述成真实增长
+- 不得在历史基线不足时伪造24小时、7天或30天涨幅
 - 不得直接混比不同平台原始Star、Like与Downloads增量
 - 不得将Gitee外部搜索计入实时平台或增长
-- 不得提交或打包用户运行产生的`data/history.json`或`data/insights.json`
-- 不得修改收藏键`openradar:favorites:v1`
 - 不得暴露Token或加入付费API
 
 ## 已知问题和风险
-- 首次加载`qwen3:4b`可能需要几十秒
-- 小模型可能误判项目成熟度、运行门槛或商业价值
-- 结构化输出虽然有Schema约束，真实模型仍可能偶发返回错误
-- README读取依赖公开路径和匿名API，可能限频或因默认分支/文件名不同失败
-- GitLab、Codeberg、Gitee、ModelScope的README路径兼容度需要实机验证
-- 未取得README时结论仅基于项目元数据
-- `keep_alive: 0`节省显存，但连续分析多个项目时每次重新加载模型会更慢
-- 服务器关闭时无法生成AI解读，但规则摘要仍可用
-- `data/insights.json`删除后AI缓存会丢失
+- 相同作者与项目名通常是强信号，但极少数情况下仍可能误合并
+- 作者/组织不同且没有显式互链的官方镜像会漏合并
+- GitHub仓库与不同命名的Hugging Face/ModelScope配套模型可能仍分开显示
+- 统一详情Hash依赖当前候选池已经加载，不是公网永久详情链接
+- 跨平台许可证可能不一致，详情只展示差异，不自动给法律结论
+- 研究包可能包含AI初筛内容，Codex必须重新验证而不能直接信任
+- 当前“一键”仍需用户手动切换到Codex并粘贴
+- `exports/codex/`持续生成会占少量硬盘，需要用户按需清理
+- 新版本解压到新目录时必须手工复制`data/history.json`和`data/insights.json`
 - localStorage清除仍会丢收藏，应继续导出JSON
-- 本地历史在电脑睡眠、关机或终端关闭时存在缺口
+- 本地服务器关闭、电脑睡眠或关机时历史存在缺口
 - 候选池不是全网全量
-- 跨平台镜像尚未去重
 
 ## 测试
 - `node --check app.js`：通过
 - `node --check platform-adapters.js`：通过
+- `node --check project-identity.js`：通过
+- `node --check codex-packet.js`：通过
+- `node --check codex-export-service.mjs`：通过
 - `node --check server.mjs`：通过
 - `node --check history-store.mjs`：通过
 - `node --check insight-store.mjs`：通过
 - `node --check insight-service.mjs`：通过
 - `node --check sw.js`：通过
+- Manifest JSON解析：通过
 - `node tests/history_store_test.mjs`：通过
 - `node tests/insight_service_test.mjs`：通过
-  - Ollama状态与`qwen3:4b`检测
-  - 结构化Schema请求
-  - README节选
-  - AI结果持久化
-  - 缓存复用
-  - 强制重新生成
-  - Ollama离线规则降级
+- `node tests/project_identity_test.mjs`：通过
+  - GitHub、Hugging Face、ModelScope三来源合并
+  - 显式仓库URL关联
+  - 仅同名不同作者不合并
+  - 主来源选择
+  - 实体别名和去重统计
+- `node tests/codex_export_test.mjs`：通过
+  - Markdown和JSON上下文
+  - 强制交接与只研究不集成
+  - 安全文件路径
+  - `autoLaunch: false`
 - `node tests/server_test.mjs`：通过
-  - `/api/insights/status`
-  - `/api/insights`
-  - `/api/insights/generate`
-  - 原历史与Gitee路线回归
+  - 原Gitee、历史、Insights路线回归
+  - `/api/codex/status`
+  - `/api/codex/export`
+  - 真实临时目录文件写入
 - `python3 tests/browser_mock_test.py`：通过
-  - 项目卡规则摘要
-  - 桌面中文解读弹窗
-  - 本地AI字段呈现
-  - 390px移动端
-  - 无横向溢出
+  - 六平台8条原始来源合并为6个项目实体
+  - 3来源统一详情页
+  - 中文解读回归
+  - Codex研究包生成、复制和结果展示
+  - 390px移动端与无横向溢出
   - 收藏v1兼容
-- `PORT=8098 OPENRADAR_AUTO_COLLECT=0 node server.mjs`：实际启动通过
-- 实际`GET /api/health`：HTTP 200，version `0.3-B`
-- 实际无Ollama环境`GET /api/insights/status`：正常返回不可用状态
-- 实际无Ollama环境`POST /api/insights/generate`：正常返回规则摘要
+- `PORT=8099 OPENRADAR_AUTO_COLLECT=0 node server.mjs`：实际启动通过
+- 实际`GET /api/health`：HTTP 200，version `0.3-C`，codexExport true
+- 实际`GET /api/codex/status`：HTTP 200，autoLaunch false
+- 实际`POST /api/codex/export`：成功写入Markdown和JSON文件
 - 实际首页：HTTP 200
-- Manifest JSON解析：通过
 - `git diff --check`：通过
-- 用户Windows真实Ollama生成：未验收
+- 用户Windows Phase 0.3-C：未验收
 
 ## Git 状态
-- Working tree：dirty，仅README、AGENTS与交接文件
+- Working tree：功能提交后clean；写README、AGENTS与交接后dirty
 - Staged：none
-- Functional commit：`0812d3d feat: add local Chinese project insights`
+- Functional commit：`2c70561 feat: add unified project profiles and Codex research packets`
 - Tags：none
-- Push：not pushed；origin仍指向本地bundle
+- Push：not pushed；origin仍指向本地Phase 0.3-A bundle
 - Merge：none
 
 ## 下一项唯一任务
-用户在Windows解压Phase 0.3-B，继续使用`start-openradar.cmd`或`node server.mjs`启动。进入“观察名单”确认Ollama与`qwen3:4b`已连接；分别选择一个GitHub项目和一个Hugging Face或ModelScope项目，点击“中文解读”，确认真实中文输出、`data/insights.json`创建、第二次打开使用缓存。只修复真实Windows/Ollama、README读取或结构化输出兼容问题；验收前不得进入自动批量生成或Codex MCP。
+用户在Windows将旧版`data/history.json`和`data/insights.json`复制到Phase 0.3-C新版，使用`start-openradar.cmd`启动；搜索或刷新后确认至少一个多来源项目实体，打开统一详情页，核对来源，再点击“生成并复制研究任务”，确认`exports/codex/`产生Markdown和JSON。只修复真实Windows去重、详情路由、收藏/缓存兼容或文件导出问题；验收前不进入MCP、自动启动Codex或云端部署。
 
 ## 关键文件
-- `insight-store.mjs`：缓存schema、持久化和读取
-- `insight-service.mjs`：Ollama检测、README读取、Prompt、Schema、降级与队列
-- `server.mjs`：Insights API与本地服务启动
-- `app.js`：规则摘要、弹窗、生成和缓存加载
-- `index.html`：Ollama状态面板和解读弹窗
-- `styles.css`：规则摘要和解读界面
-- `data/.gitkeep`
+- `project-identity.js`：规范URL、身份信号、并查集合并、实体别名和统计
+- `codex-packet.js`：Codex研究任务和机器上下文
+- `codex-export-service.mjs`：本地安全导出服务
+- `server.mjs`：Codex API、本地服务和既有历史/Insights/Gitee路线
+- `app.js`：实体状态、卡片、详情路由、收藏兼容和Codex交互
+- `platform-adapters.js`：homepage、repositoryUrl与relatedUrls元数据
+- `index.html`：详情视图与实体指标
+- `styles.css`：统一详情和Codex研究包界面
+- `sw.js`：PWA缓存v8
+- `exports/codex/.gitkeep`
 - `.gitignore`
-- `tests/insight_service_test.mjs`
+- `tests/project_identity_test.mjs`
+- `tests/codex_export_test.mjs`
 - `tests/server_test.mjs`
 - `tests/browser_mock_test.py`
 - `README.md`

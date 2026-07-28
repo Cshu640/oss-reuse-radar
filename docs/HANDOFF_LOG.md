@@ -29,3 +29,27 @@
 - 测试：JS语法、Manifest、diff、HTTP、模拟桌面交互、旧收藏兼容、中文扩展、用途筛选、390px移动端均通过；真实API和用户验收未执行。
 - 下一项唯一任务：在用户Windows机器更新Phase 0.2-A并验证真实API召回，只修复本阶段缺陷后再进入历史快照。
 - 关键文件：`app.js`、`index.html`、`styles.css`、`sw.js`、`README.md`、`HANDOFF.md`、`docs/PROJECT_STATE.json`、`docs/HANDOFF_LOG.md`。
+
+## 2026-07-28 — Phase 0.2-A final status pointer
+- 当前阶段：Phase 0.2-A
+- 分支：`phase-0.2-a-office-life-search`
+- HEAD：`88bcd78`（功能提交 `46c67ae`，交接提交 `88bcd78`）
+- 工作区：dirty，仅本条最终状态指针与 HEAD 同步更新；staged none。
+- 标签/推送/合并：tags none；not pushed；merge none。
+- 状态：代码与交接均已提交；真实外部API和用户Windows验收仍未完成。
+- 下一项唯一任务：用户Windows更新并验收 Phase 0.2-A。
+
+## 2026-07-28 — Phase 0.2-A user acceptance
+- 当前阶段：Phase 0.2-A — Office/Life Taxonomy & Chinese Search Expansion
+- 分支：`phase-0.2-a-office-life-search`
+- HEAD：`88bcd78`（本验收记录提交前）
+- 状态：用户已在 Windows Edge 和已安装 PWA 中完成真实人工验收，Phase 0.2-A 验收通过。
+- 已完成：办公效率、生活工具、商业应用底座分类；用途筛选；中文关键词扩展搜索；收藏持久化；桌面PWA安装。
+- 未完成：历史快照、真实增长、云同步、更多平台、MCP、生产部署。
+- 当前阻塞：无 Phase 0.2-A 验收阻塞；开发容器DNS仍不适合验证新增平台真实API。
+- 禁止事项：不得把代理潜力分描述成真实涨幅；不得把规则搜索描述成大模型语义检索；不得破坏收藏键；不得加入付费API。
+- 已知问题和风险：复杂中文需求仍可能漏召回；许可证与自动分类仍需人工复核；localStorage清除会丢收藏。
+- 工作区/暂存/提交/标签/推送/合并：working tree dirty（验收交接）；staged none；HEAD `88bcd78`；tags none；not pushed；merge none。
+- 测试：用户确认首页、分类、用途筛选、收藏、中文搜索流程和Windows PWA安装全部通过。
+- 下一项唯一任务：Phase 0.2-B 接入 GitLab、Codeberg、Gitee、ModelScope 的零成本平台适配器，并明确呈现数据源失败或降级状态。
+- 关键文件：`app.js`、`index.html`、`styles.css`、`sw.js`、`README.md`、`HANDOFF.md`、`docs/PROJECT_STATE.json`、`docs/HANDOFF_LOG.md`。

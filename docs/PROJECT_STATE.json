@@ -1,1 +1,47 @@
-{"phase":"0.1","status":"code_complete_runtime_partially_verified","branch":"phase-0.1-pwa-prototype","head":null,"working_tree":"dirty","completed":["Static PWA shell","GitHub public API radar and search","Hugging Face Hub API radar and search","Category/platform/license filters","Local favorites with tags notes and next action","Favorites JSON export","Offline application shell","Agent handoff files"],"not_completed":["Historical snapshot database","True 24h/7d/30d growth","Cloud favorites sync","Additional platform adapters","Codex MCP server","Human browser acceptance test","Production deployment"],"blocked_by":[],"tests":[],"next_task":"Implement Phase 0.2 Supabase snapshot schema and scheduled GitHub collector without paid APIs."}
+{
+  "phase": "0.2-A",
+  "status": "code_complete_local_browser_mock_verified_user_unverified",
+  "branch": "phase-0.2-a-office-life-search",
+  "head": "46c67ae",
+  "working_tree": "dirty_handoff_updates_only",
+  "completed": [
+    "Office Productivity category",
+    "Life Tools category",
+    "Business Application Foundation category",
+    "Use-type inference and filtering",
+    "Chinese-to-English local search query expansion",
+    "Multi-query GitHub and Hugging Face search flow",
+    "Office and life GitHub topic discovery queries",
+    "15-minute radar cache",
+    "Legacy favorites v1 compatibility",
+    "Service worker cache v2"
+  ],
+  "not_completed": [
+    "User Windows acceptance test for Phase 0.2-A",
+    "Real external API verification in current container",
+    "Historical snapshot database",
+    "True 24h/7d/30d growth",
+    "Cloud favorites sync",
+    "Additional platform adapters",
+    "Codex MCP server",
+    "Production deployment"
+  ],
+  "blocked_by": [
+    "Current container DNS resolution prevents direct GitHub and Hugging Face API verification"
+  ],
+  "tests": [
+    "node --check app.js: passed",
+    "node --check sw.js: passed",
+    "manifest JSON parse: passed",
+    "git diff --check: passed",
+    "local HTTP smoke: passed",
+    "Chromium mocked desktop interaction: passed",
+    "legacy favorites v1 compatibility: passed",
+    "Chinese search expansion: passed",
+    "use-type filter: passed",
+    "390px mobile overflow and menu: passed",
+    "real external API: not verified",
+    "user acceptance: not run"
+  ],
+  "next_task": "Install or replace the Phase 0.2-A files on the user's Windows machine and verify real office/life radar discovery, use-type filters, and Chinese search recall before starting historical snapshots."
+}

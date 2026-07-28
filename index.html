@@ -35,7 +35,7 @@
 
       <section id="radarView" class="view active">
         <div class="hero">
-          <div><em>OPEN-SOURCE INTELLIGENCE</em><h1>今天有哪些项目<br>值得立即关注？</h1><p>跨平台发现、潜力评分、许可证判断、用途识别、收藏与后续接入建议。</p></div>
+          <div><em>OPEN-SOURCE INTELLIGENCE</em><h1>今天有哪些项目<br>值得立即关注？</h1><p>跨平台发现、真实增长、免费中文大白话、许可证判断、收藏与后续接入建议。</p></div>
           <div class="metrics"><div><b id="candidateMetric">—</b><span>本次候选</span></div><div><b id="freshMetric">—</b><span>30天内新项目</span></div><div><b id="savedMetric">0</b><span>已收藏</span></div></div>
         </div>
         <div class="toolbar">
@@ -80,7 +80,8 @@
           <div><b id="historyLast">—</b><span>最近快照</span></div>
         </div>
         <article class="roadmap history-panel"><div class="split"><div><h3>本地历史系统</h3><p id="historyMode">检测中</p></div><button id="collectHistory" class="primary">立即采集一次</button></div><p id="historyNote">正在检测本地服务器。</p><ul><li>24小时榜：历史跨度达到约20小时后才启用</li><li>7天榜：历史跨度达到约6天后才启用</li><li>30天榜：历史跨度达到约25天后才启用</li><li>不同平台分别使用 Stars、Likes 或 Downloads，不把原始数字强行混成同一单位</li><li>本地数据保存在 <code>data/history.json</code>，不会上传到第三方</li></ul></article>
-        <article class="roadmap"><h3>后续路线</h3><ul><li>云端无人值守定时采集</li><li>跨平台同项目身份去重</li><li>收藏项目优先追踪与爆发提醒</li><li>ecosyste.ms 与软件包生态</li><li>Codex MCP 与项目适配分析</li></ul></article>
+        <article class="roadmap insight-panel"><div class="split"><div><h3>免费中文大白话</h3><p id="insightMode">检测本地Ollama</p></div><button id="refreshInsights">重新检测</button></div><p id="insightNote">未检测。</p><div class="insight-mini-metrics"><span><b id="insightCount">—</b> 已缓存解读</span><span><b id="insightModel">qwen3:4b</b> 当前模型</span></div><ul><li>所有项目先显示不耗算力的规则摘要</li><li>点击“中文解读”后才调用本地模型，每次只处理一个项目</li><li>生成后保存在 <code>data/insights.json</code>，项目未更新时直接复用</li><li>模型请求结束后立即卸载，避免持续占用显存</li></ul></article>
+        <article class="roadmap"><h3>后续路线</h3><ul><li>云端无人值守定时采集</li><li>跨平台同项目身份去重</li><li>收藏项目优先追踪与爆发提醒</li><li>ecosyste.ms 与软件包生态</li><li>Codex MCP 与仓库级接入分析</li></ul></article>
       </section>
     </main>
   </div>
@@ -94,6 +95,13 @@
       <label>下一步动作<select id="action"><option value="later">以后研究</option><option value="test">立即测试</option><option value="codex">交给 Codex 分析</option><option value="reference">只参考设计</option></select></label>
       <div class="dialog-actions"><button type="button" id="cancel">取消</button><button class="primary">保存收藏</button></div>
     </form>
+  </dialog>
+
+  <dialog id="insightDialog" class="insight-dialog">
+    <div class="dialog-head"><div><em>LOCAL AI INSIGHT</em><h2 id="insightTitle">中文大白话解读</h2><p id="insightSubtitle">规则摘要会立即显示，本地AI按需生成。</p></div><button type="button" id="closeInsight">×</button></div>
+    <div id="insightLoading" class="insight-loading" hidden><span></span><div><b>本地模型正在分析</b><p>首次加载模型可能需要几十秒，请不要重复点击。</p></div></div>
+    <div id="insightContent" class="insight-content"></div>
+    <div class="dialog-actions"><button type="button" id="regenerateInsight">重新生成</button><button type="button" id="closeInsightBottom" class="primary">完成</button></div>
   </dialog>
   <div id="toast"></div>
   <script type="module" src="app.js"></script>

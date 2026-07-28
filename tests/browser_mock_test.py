@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mocked browser smoke test for OpenRadar Phase 0.3-A.
+"""Mocked browser smoke test for OpenRadar Phase 0.3-B.
 
 This test never contacts external services. It exercises the six adapter schemas,
 Chinese query expansion, platform status rendering, responsive layout, and the
@@ -14,7 +14,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
-SCREENSHOT = Path('/mnt/data/open-source-radar-phase-0.3-a-browser.png')
+SCREENSHOT = Path('/mnt/data/open-source-radar-phase-0.3-b-browser.png')
 
 
 def build_html() -> str:
@@ -72,7 +72,10 @@ window.fetch = (input, options = {}) => {
   if (url.includes('huggingface.co/api/models')) return jsonResponse([{ id: 'demo/hf-model', likes: 31, downloads: 900, pipeline_tag: 'text-generation', library_name: 'transformers', tags: ['license:apache-2.0', 'npc', 'memory'], lastModified: '2026-07-28T00:00:00Z', createdAt: '2026-07-02T00:00:00Z' }]);
   if (url.includes('gitlab.com/api/v4/projects')) return jsonResponse([repo('gitlab', 1)]);
   if (url.includes('codeberg.org/api/v1/repos/search')) return jsonResponse({ ok: true, data: [repo('codeberg', 1)] });
-  if (url.includes('/api/health')) return jsonResponse({ status: 'ok', version: '0.3-A', giteeProxy: true, history: true });
+  if (url.includes('/api/health')) return jsonResponse({ status: 'ok', version: '0.3-B', giteeProxy: true, history: true, insights: true });
+  if (url.includes('/api/insights/status')) return jsonResponse({ enabled: true, available: true, ollamaRunning: true, model: 'qwen3:4b', modelInstalled: true, message: 'Ollama已连接，模型qwen3:4b可用', store: { insightCount: 0 } });
+  if (url.includes('/api/insights?')) return jsonResponse({ insights: {} });
+  if (url.includes('/api/insights/generate')) return jsonResponse({ projectId: 'github:demo/github-tool-1', source: 'ollama', model: 'qwen3:4b', generatedAt: '2026-07-29T00:00:00Z', readmeUsed: true, summary: '这是一个适合网页游戏的NPC记忆开源组件。', whatItDoes: '让NPC保存玩家行为和关系变化。', bestFor: '网页游戏与AI活世界原型。', useMode: '作为TypeScript组件接入现有游戏。', commercial: 'MIT通常允许商用，但仍需核对依赖。', requirements: '需要Node.js，不要求独立GPU。', codexValue: 'Codex可以审计接口并接入现有项目。', fitForUser: '适合用户的网页游戏和Codex工作流。', risks: ['需要验证存档兼容。'], recommendation: '收藏并交给Codex轻量审计。', confidence: 'high' });
   if (url.includes('/api/history/capture')) return jsonResponse({ received: 7, added: 7, skipped: 0 });
   if (url.includes('/api/history/status')) return jsonResponse({ enabled: true, storage: 'local-json', projectCount: 7, sampleCount: 7, historyAgeHours: 2, firstCapturedAt: '2026-07-28T00:00:00Z', lastCapturedAt: '2026-07-28T02:00:00Z', readiness: { day: false, week: false, month: false }, collector: { running: false } });
   if (url.includes('/api/history/growth')) {
@@ -105,6 +108,10 @@ def run_viewport(page, width: int, height: int, save_screenshot: bool = False) -
     page.set_content(build_html(), wait_until='load')
     page.wait_for_function("document.querySelectorAll('#searchGrid .card').length >= 7", timeout=15000)
 
+    if save_screenshot:
+        page.click('#searchGrid [data-analyze]')
+        page.wait_for_function("document.getElementById('insightDialog').open && document.getElementById('insightContent').textContent.includes('NPC记忆')", timeout=15000)
+
     if width <= 760:
         page.click('#menu')
 
@@ -119,7 +126,11 @@ def run_viewport(page, width: int, height: int, save_screenshot: bool = False) -
       sidebarOpen: document.getElementById('sidebar').classList.contains('open'),
       favoriteKeyPresent: document.documentElement.innerHTML.includes('openradar:favorites:v1'),
       historyText: document.getElementById('radarDesc').textContent,
-      growthLines: document.querySelectorAll('#projectGrid .growth-line').length
+      growthLines: document.querySelectorAll('#projectGrid .growth-line').length,
+      plainSummaries: document.querySelectorAll('.plain-summary').length,
+      insightDialogOpen: document.getElementById('insightDialog').open,
+      insightText: document.getElementById('insightContent').textContent,
+      insightMode: document.getElementById('insightMode').textContent
     })''')
     result['errors'] = errors
     if save_screenshot:
@@ -137,6 +148,11 @@ def assert_result(result: dict, mobile: bool = False) -> None:
     assert '找到 7 个候选' in result['summary'], result['summary']
     assert '本地历史' in result['historyText'], result['historyText']
     assert result['growthLines'] >= 6, result
+    assert result['plainSummaries'] >= 7, result
+    if not mobile:
+        assert result['insightDialogOpen'], result
+        assert 'NPC记忆' in result['insightText'], result
+        assert 'Ollama已连接' in result['insightMode'], result
     assert not result['horizontalOverflow'], result
     if mobile:
         assert result['sidebarOpen'], result

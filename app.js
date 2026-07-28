@@ -1,7 +1,7 @@
 import { platformCatalog, platformIds, radarPlatform, searchPlatform } from './platform-adapters.js';
 
 const FAVORITES_KEY = 'openradar:favorites:v1';
-const RADAR_CACHE_KEY = 'openradar:radar-cache:v6';
+const RADAR_CACHE_KEY = 'openradar:radar-cache:v7';
 const HISTORY_PERIOD_MAP = { today: 'day', week: 'week', month: 'month' };
 const HISTORY_TARGET_HOURS = { day: 24, week: 168, month: 720 };
 const HISTORY_COPY = {
@@ -166,6 +166,11 @@ const state = {
   growth: {},
   historyStatus: null,
   historyAvailable: false,
+  insights: {},
+  insightStatus: null,
+  insightServiceAvailable: false,
+  insightAvailable: false,
+  activeInsightId: '',
 };
 
 const $ = (id) => document.getElementById(id);
@@ -371,6 +376,30 @@ function commercialFriendly(license = '') {
   return /MIT|Apache|BSD|ISC|MPL|Unlicense/i.test(license);
 }
 
+function rulePlainSummary(project) {
+  const category = project.category || classifyCategory(project);
+  const description = String(project.description || '').replace(/[。.!！]+$/u, '').trim();
+  const useTypes = inferUseTypes(project);
+  const mode = useTypes.includes('direct')
+    ? '可以先直接安装体验'
+    : useTypes.includes('component')
+      ? '更适合当作技术组件接入现有项目'
+      : useTypes.includes('codex')
+        ? '适合交给Codex审计后二次开发'
+        : '需要先阅读README确认使用方式';
+  return `${project.name}是一个偏${category}的开源项目${description ? `，主要做${description}` : ''}；${mode}。`;
+}
+
+function projectInsight(project) {
+  return state.insights[project.id] || null;
+}
+
+function insightSourceLabel(insight) {
+  if (!insight) return '规则摘要';
+  if (insight.source === 'ollama') return insight.cached ? '本地AI缓存' : '本地AI解读';
+  return '规则摘要';
+}
+
 function favoriteById(id) {
   return state.favorites.find((item) => item.id === id);
 }
@@ -407,6 +436,9 @@ function projectCard(project, saved = false, showGrowth = false) {
   const useBadges = inferUseTypes(project)
     .map((type) => `<span class="badge use-type">${escapeHtml(useTypeLabels[type] || type)}</span>`)
     .join('');
+  const insight = projectInsight(project);
+  const plainSummary = insight?.summary || rulePlainSummary(project);
+  const insightLabel = insightSourceLabel(insight);
 
   return `<article class="card">
     <div class="card-top">
@@ -415,6 +447,7 @@ function projectCard(project, saved = false, showGrowth = false) {
       <button class="star ${favorite ? 'saved' : ''}" data-favorite="${escapeHtml(project.id)}" aria-label="收藏项目">${favorite ? '★' : '☆'}</button>
     </div>
     <p class="desc">${escapeHtml(project.description || '暂无描述，需要进一步读取项目文档。')}</p>
+    <div class="plain-summary ${insight?.source === 'ollama' ? 'ai' : 'rule'}"><span>${escapeHtml(insightLabel)}</span><p>${escapeHtml(plainSummary)}</p></div>
     <div class="badges">
       <span class="badge platform">${escapeHtml(platformLabel)}</span>
       <span class="badge">${escapeHtml(project.category || classifyCategory(project))}</span>
@@ -432,7 +465,7 @@ function projectCard(project, saved = false, showGrowth = false) {
     </div>
     <div class="actions">
       <a href="${escapeHtml(project.url)}" target="_blank" rel="noopener">打开项目</a>
-      <button data-analyze="${escapeHtml(project.id)}">适配分析</button>
+      <button data-analyze="${escapeHtml(project.id)}">中文解读</button>
       ${saved ? `<button data-remove="${escapeHtml(project.id)}">移出收藏</button>` : ''}
     </div>
   </article>`;
@@ -450,7 +483,7 @@ function bindProjectActions(root) {
     };
   });
   root.querySelectorAll('[data-analyze]').forEach((button) => {
-    button.onclick = () => toast(`${findProject(button.dataset.analyze)?.name || '该项目'}：深度适配分析将在后续阶段接入`);
+    button.onclick = () => openInsightDialog(button.dataset.analyze);
   });
 }
 
@@ -588,7 +621,11 @@ function renderSourceHealth(target, statuses) {
 
 async function fetchJsonSafe(url, options = {}) {
   const response = await fetch(url, options);
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  if (!response.ok) {
+    let detail = '';
+    try { detail = (await response.json())?.error || ''; } catch { /* ignore non-JSON errors */ }
+    throw new Error(`HTTP ${response.status}${detail ? ` · ${detail}` : ''}`);
+  }
   return response.json();
 }
 
@@ -607,6 +644,135 @@ function renderHistoryStatus() {
       ? `${collector.running ? '后台采集中。' : '后台待命。'}${readyLabels.length ? ` 已具备${readyLabels.join('、')}真实增长基线。` : ' 首次运行后需要等待时间积累，不能立即生成历史涨幅。'} 本地服务器关闭期间不会自动采集。`
       : '当前为静态模式，不会保存历史。请使用 node server.mjs 或 start-openradar.cmd 启动。';
   }
+}
+
+function renderInsightStatus() {
+  const status = state.insightStatus || {};
+  const store = status.store || {};
+  if (els.insightCount) els.insightCount.textContent = store.insightCount ?? '—';
+  if (els.insightModel) els.insightModel.textContent = status.model || 'qwen3:4b';
+  if (els.insightMode) {
+    els.insightMode.textContent = state.insightAvailable
+      ? 'Ollama已连接 · 按需生成'
+      : state.insightServiceAvailable
+        ? '规则摘要可用 · 本地AI未就绪'
+        : '静态模式 · 仅规则摘要';
+  }
+  if (els.insightNote) {
+    els.insightNote.textContent = state.insightServiceAvailable
+      ? `${status.message || '本地解读服务已启用。'}${store.insightCount ? ` 已缓存${store.insightCount}个项目，重复打开不会再次占用算力。` : ' 尚未生成缓存。'}`
+      : '请使用 node server.mjs 或 start-openradar.cmd 启动，才能调用本地Ollama并保存解读。';
+  }
+}
+
+async function loadInsightStatus(force = false) {
+  try {
+    const status = await fetchJsonSafe(`/api/insights/status${force ? '?refresh=1' : ''}`);
+    state.insightStatus = status;
+    state.insightServiceAvailable = true;
+    state.insightAvailable = Boolean(status.available);
+  } catch {
+    state.insightStatus = null;
+    state.insightServiceAvailable = false;
+    state.insightAvailable = false;
+  }
+  renderInsightStatus();
+}
+
+async function loadCachedInsights(projects) {
+  if (!state.insightServiceAvailable) return;
+  const ids = unique(projects.map((project) => project.id)).filter((id) => !state.insights[id]).slice(0, 250);
+  if (!ids.length) return;
+  try {
+    const response = await fetchJsonSafe(`/api/insights?ids=${encodeURIComponent(ids.join(','))}`);
+    const received = response.insights || {};
+    if (!Object.keys(received).length) return;
+    state.insights = { ...state.insights, ...received };
+    renderRadar();
+    renderFavorites();
+    if (state.results.length) renderResults();
+  } catch {
+    // Cached insight loading is optional and must not block radar use.
+  }
+}
+
+function insightSection(title, value) {
+  if (!value) return '';
+  return `<section><h3>${escapeHtml(title)}</h3><p>${escapeHtml(value)}</p></section>`;
+}
+
+function renderInsightDetails(project, insight, { loading = false, error = '' } = {}) {
+  if (!project || !els.insightContent) return;
+  const value = insight || {
+    summary: rulePlainSummary(project),
+    whatItDoes: project.description || '项目简介不足，需要阅读README进一步判断。',
+    bestFor: `适合关注${project.category || classifyCategory(project)}、准备做技术选型或寻找开源底座的人。`,
+    useMode: inferUseTypes(project).map((type) => useTypeLabels[type] || type).join('；'),
+    commercial: commercialFriendly(project.license)
+      ? `${project.license}通常较适合商业使用，但仍需复核许可证原文和第三方素材。`
+      : `${project.license || '许可证待核查'}不能直接认定可商用。`,
+    requirements: `${project.language ? `主要技术：${project.language}。` : ''}安装方式、硬件要求和外部服务依赖需要查看README。`,
+    codexValue: '可以先让Codex检查目录结构、依赖、许可证和核心模块，再决定Fork、抽取组件或只参考设计。',
+    fitForUser: '与优先复用开源、由Codex实施的工作方式存在一定匹配度；是否现在投入仍需看接入成本。',
+    risks: ['当前是规则摘要，不等同于完整README、代码和许可证审计。'],
+    recommendation: '先收藏并阅读项目主页；确认真实可用后再交给Codex审计。',
+    source: 'rule-fallback',
+    confidence: 'low',
+  };
+  const source = value.source === 'ollama' ? `本地AI · ${value.model || 'Ollama'}` : '免费规则摘要';
+  const confidence = { high: '较高', medium: '中等', low: '较低' }[value.confidence] || '中等';
+  const risks = Array.isArray(value.risks) && value.risks.length
+    ? `<section><h3>主要风险</h3><ul>${value.risks.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></section>`
+    : '';
+  els.insightContent.innerHTML = `
+    ${error ? `<div class="insight-error">${escapeHtml(error)}</div>` : ''}
+    <div class="insight-summary"><span>${escapeHtml(source)} · 置信度${escapeHtml(confidence)}</span><strong>${escapeHtml(value.summary || rulePlainSummary(project))}</strong><small>${value.readmeUsed ? '已读取README节选' : '未读取README或仅使用元数据'}${value.generatedAt ? ` · ${escapeHtml(timeAgo(value.generatedAt))}生成` : ''}</small></div>
+    <div class="insight-sections">
+      ${insightSection('它到底是干什么的', value.whatItDoes)}
+      ${insightSection('适合谁', value.bestFor)}
+      ${insightSection('怎么使用或接入', value.useMode)}
+      ${insightSection('许可证与商业使用', value.commercial)}
+      ${insightSection('运行门槛', value.requirements)}
+      ${insightSection('交给Codex有什么价值', value.codexValue)}
+      ${insightSection('对你的适配度', value.fitForUser)}
+      ${risks}
+      ${insightSection('最终建议', value.recommendation)}
+    </div>`;
+  els.insightLoading.hidden = !loading;
+  els.regenerateInsight.disabled = loading || !state.insightServiceAvailable;
+  els.regenerateInsight.textContent = loading ? '正在生成…' : '重新生成';
+}
+
+async function generateProjectInsight(project, force = false) {
+  renderInsightDetails(project, state.insights[project.id], { loading: true });
+  try {
+    const insight = await fetchJsonSafe('/api/insights/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project, force }),
+    });
+    state.insights[project.id] = insight;
+    renderInsightDetails(project, insight);
+    renderRadar();
+    renderFavorites();
+    if (state.results.length) renderResults();
+    await loadInsightStatus(false);
+    toast(insight.source === 'ollama' ? (insight.cached ? '已读取本地AI缓存' : '中文解读已生成并缓存') : '本地AI未就绪，已显示规则摘要');
+  } catch (error) {
+    renderInsightDetails(project, state.insights[project.id], { error: readableError(error) });
+    toast(`中文解读失败：${readableError(error)}`);
+  }
+}
+
+function openInsightDialog(id) {
+  const project = findProject(id);
+  if (!project) return;
+  state.activeInsightId = id;
+  els.insightTitle.textContent = `中文解读 · ${project.name}`;
+  els.insightSubtitle.textContent = `${platformMeta(project).label} · ${project.owner || '未知作者'} · ${project.license || '许可证待核查'}`;
+  renderInsightDetails(project, state.insights[id]);
+  els.insightDialog.showModal();
+  if (!state.insights[id] && state.insightServiceAvailable) void generateProjectInsight(project, false);
 }
 
 async function loadHistoryGrowth(projects, capture = false) {
@@ -648,6 +814,7 @@ async function radar(force = false) {
       renderSourceHealth(els.sourceHealth, state.sourceStatus);
       renderRadar();
       void loadHistoryGrowth(state.projects, false);
+      void loadCachedInsights([...state.projects, ...state.favorites]);
       return;
     }
   }
@@ -695,6 +862,7 @@ async function radar(force = false) {
   renderSourceHealth(els.sourceHealth, state.sourceStatus);
   renderRadar();
   void loadHistoryGrowth(liveProjects.length ? liveProjects : state.projects, Boolean(liveProjects.length));
+  void loadCachedInsights([...state.projects, ...state.favorites]);
 }
 
 function dedupeProjects(projects) {
@@ -809,6 +977,7 @@ async function searchProjects(query) {
   renderSourceHealth(els.searchSources, state.searchSourceStatus);
   renderSearchFallbacks(query, fallbackPlatforms);
   renderResults();
+  void loadCachedInsights(state.results);
 }
 
 function renderSearchFallbacks(query, failedPlatforms) {
@@ -844,7 +1013,7 @@ async function detectRuntimeMode() {
     if (!health.giteeProxy) throw new Error('兼容通道未启用');
     els.runtimeMode.textContent = '● 本地兼容服务';
     els.runtimeMode.className = 'runtime-live';
-    els.runtimeDetail.textContent = '五平台实时 · Gitee受限 · 本地历史';
+    els.runtimeDetail.textContent = health.insights ? '五平台实时 · Gitee受限 · 历史与本地AI' : '五平台实时 · Gitee受限 · 本地历史';
   } catch {
     els.runtimeMode.textContent = '● 静态模式';
     els.runtimeMode.className = 'runtime-warn';
@@ -854,6 +1023,7 @@ async function detectRuntimeMode() {
 
 function init() {
   detectRuntimeMode();
+  void loadInsightStatus(false).then(() => loadCachedInsights([...state.projects, ...state.favorites]));
   renderCategories();
   els.suggestions.innerHTML = suggestions.map((query) => `<button class="chip" data-query="${escapeHtml(query)}">${escapeHtml(query)}</button>`).join('');
 
@@ -942,6 +1112,24 @@ function init() {
     URL.revokeObjectURL(url);
   };
 
+  if (els.refreshInsights) {
+    els.refreshInsights.onclick = async () => {
+      els.refreshInsights.disabled = true;
+      els.refreshInsights.textContent = '检测中…';
+      await loadInsightStatus(true);
+      await loadCachedInsights([...state.projects, ...state.results, ...state.favorites]);
+      els.refreshInsights.disabled = false;
+      els.refreshInsights.textContent = '重新检测';
+      toast(state.insightAvailable ? 'Ollama与qwen3:4b已连接' : (state.insightStatus?.message || '本地AI未就绪'));
+    };
+  }
+
+  els.closeInsight.onclick = els.closeInsightBottom.onclick = () => els.insightDialog.close();
+  els.regenerateInsight.onclick = () => {
+    const project = findProject(state.activeInsightId);
+    if (project) void generateProjectInsight(project, true);
+  };
+
   if (els.collectHistory) {
     els.collectHistory.onclick = async () => {
       els.collectHistory.disabled = true;
@@ -987,6 +1175,7 @@ function init() {
 
   updateCounters();
   renderHistoryStatus();
+  renderInsightStatus();
   radar(false);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
 }

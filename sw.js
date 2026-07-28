@@ -1,4 +1,4 @@
-const CACHE_NAME = 'openradar-shell-v6';
+const CACHE_NAME = 'openradar-shell-v7';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './platform-adapters.js', './manifest.webmanifest', './icons/icon.svg'];
 
 self.addEventListener('install', (event) => {

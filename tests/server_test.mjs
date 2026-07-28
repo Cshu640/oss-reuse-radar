@@ -95,9 +95,16 @@ const historyCollector = {
   collect: async () => ({ running: false, lastProjectCount: 0, lastAddedSamples: 0 }),
 };
 
+const insightService = {
+  status: async () => ({ enabled: true, available: true, model: 'qwen3:4b', store: { insightCount: 1 } }),
+  getMany: async (ids) => Object.fromEntries(ids.map((id) => [id, { projectId: id, source: 'ollama', summary: '缓存中文解读' }])),
+  generate: async (project, options) => ({ projectId: project.id, source: 'ollama', summary: '新生成中文解读', force: Boolean(options.force) }),
+};
+
 const server = createOpenRadarServer({
   historyStore,
   historyCollector,
+  insightService,
   giteeSearch: async (query, limit) => ({
     projects: [{ full_name: 'mock/project', name: 'project', owner: { login: 'mock' }, html_url: 'https://gitee.com/mock/project' }],
     source: 'mock',
@@ -112,9 +119,25 @@ const base = `http://127.0.0.1:${address.port}`;
 const health = await fetch(`${base}/api/health`).then((response) => response.json());
 assert.equal(health.giteeProxy, true);
 assert.equal(health.history, true);
+assert.equal(health.insights, true);
+assert.equal(health.version, '0.3-B');
 const proxied = await fetch(`${base}/api/gitee/search?q=AI&limit=3`).then((response) => response.json());
 assert.equal(proxied.projects.length, 1);
 assert.equal(proxied.query, 'AI');
+
+
+const insightStatus = await fetch(`${base}/api/insights/status`).then((response) => response.json());
+assert.equal(insightStatus.available, true);
+assert.equal(insightStatus.model, 'qwen3:4b');
+const cachedInsights = await fetch(`${base}/api/insights?ids=${encodeURIComponent('github:mock/project')}`).then((response) => response.json());
+assert.equal(cachedInsights.insights['github:mock/project'].summary, '缓存中文解读');
+const generatedInsight = await fetch(`${base}/api/insights/generate`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ project: { id: 'github:mock/project', platform: 'github', name: 'project' }, force: true }),
+}).then((response) => response.json());
+assert.equal(generatedInsight.summary, '新生成中文解读');
+assert.equal(generatedInsight.force, true);
 
 const captured = await fetch(`${base}/api/history/capture`, {
   method: 'POST',
@@ -136,4 +159,4 @@ server.close();
 await once(server, 'close');
 await rm(historyRoot, { recursive: true, force: true });
 
-console.log(JSON.stringify({ parsed: parsed.length, fallbackSource: fallback.source, exploreSource: explore.source, stopLossSource: stopLoss.source, health, proxied: proxied.projects.length, historyProjects: historyStatus.projectCount }, null, 2));
+console.log(JSON.stringify({ parsed: parsed.length, fallbackSource: fallback.source, exploreSource: explore.source, stopLossSource: stopLoss.source, health, proxied: proxied.projects.length, historyProjects: historyStatus.projectCount, insightModel: insightStatus.model }, null, 2));

@@ -3,6 +3,8 @@ import { readFile, stat } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { HistoryStore } from './history-store.mjs';
+import { InsightStore } from './insight-store.mjs';
+import { createInsightService } from './insight-service.mjs';
 import { platformIds, radarPlatform } from './platform-adapters.js';
 
 const ROOT_DIR = fileURLToPath(new URL('.', import.meta.url));
@@ -395,12 +397,12 @@ async function serveStatic(req, res, rootDir) {
   }
 }
 
-export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = createGiteeSearchService(), historyStore = null, historyCollector = null } = {}) {
+export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = createGiteeSearchService(), historyStore = null, historyCollector = null, insightService = null } = {}) {
   return createServer(async (req, res) => {
     try {
       const requestUrl = new URL(req.url || '/', 'http://localhost');
       if (req.method === 'GET' && requestUrl.pathname === '/api/health') {
-        json(res, 200, { status: 'ok', version: '0.3-A', giteeProxy: true, giteeMode: 'bounded-fallback', history: Boolean(historyStore), historyCollector: historyCollector?.getState?.() || null });
+        json(res, 200, { status: 'ok', version: '0.3-B', giteeProxy: true, giteeMode: 'bounded-fallback', history: Boolean(historyStore), historyCollector: historyCollector?.getState?.() || null, insights: Boolean(insightService) });
         return;
       }
       if (req.method === 'GET' && requestUrl.pathname === '/api/history/status') {
@@ -441,6 +443,38 @@ export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = create
         json(res, 200, await historyCollector.collect('manual'));
         return;
       }
+      if (req.method === 'GET' && requestUrl.pathname === '/api/insights/status') {
+        if (!insightService) {
+          json(res, 503, { enabled: false, error: 'Insight service is not configured' });
+          return;
+        }
+        json(res, 200, await insightService.status(requestUrl.searchParams.get('refresh') === '1'));
+        return;
+      }
+      if (req.method === 'GET' && requestUrl.pathname === '/api/insights') {
+        if (!insightService) {
+          json(res, 503, { error: 'Insight service is not configured' });
+          return;
+        }
+        const ids = (requestUrl.searchParams.get('ids') || '').split(',').map((value) => value.trim()).filter(Boolean).slice(0, 250);
+        json(res, 200, { insights: await insightService.getMany(ids) });
+        return;
+      }
+      if (req.method === 'POST' && requestUrl.pathname === '/api/insights/generate') {
+        if (!insightService) {
+          json(res, 503, { error: 'Insight service is not configured' });
+          return;
+        }
+        try {
+          const body = await readJsonBody(req, 500_000);
+          const insight = await insightService.generate(body.project, { force: Boolean(body.force) });
+          console.log(`[Insights] project=${JSON.stringify(body.project?.id || '')} source=${insight.source} cached=${Boolean(insight.cached)}`);
+          json(res, 200, insight);
+        } catch (error) {
+          json(res, 502, { error: error?.message || 'Local insight generation failed' });
+        }
+        return;
+      }
       if (req.method === 'GET' && requestUrl.pathname === '/api/gitee/search') {
         const query = requestUrl.searchParams.get('q') || '';
         const limit = requestUrl.searchParams.get('limit') || 20;
@@ -471,7 +505,10 @@ if (entryPath && pathToFileURL(entryPath).href === import.meta.url) {
     const historyStore = new HistoryStore(resolve(ROOT_DIR, 'data/history.json'));
     await historyStore.init();
     const historyCollector = createHistoryCollector({ historyStore });
-    const server = createOpenRadarServer({ historyStore, historyCollector });
+    const insightStore = new InsightStore(resolve(ROOT_DIR, 'data/insights.json'));
+    await insightStore.init();
+    const insightService = createInsightService({ store: insightStore });
+    const server = createOpenRadarServer({ historyStore, historyCollector, insightService });
     server.on('error', (error) => {
       console.error('');
       if (error?.code === 'EADDRINUSE') {
@@ -485,10 +522,11 @@ if (entryPath && pathToFileURL(entryPath).href === import.meta.url) {
     });
     server.listen(DEFAULT_PORT, '127.0.0.1', () => {
       console.log('');
-      console.log('  OpenRadar Phase 0.3-A');
+      console.log('  OpenRadar Phase 0.3-B');
       console.log(`  Local: http://localhost:${DEFAULT_PORT}`);
       console.log('  Gitee: 有止损兼容通道（v5 → 官方搜索 → 首页探索 → 外部搜索）');
       console.log('  History: 本地快照已启用（启动即采集，之后每6小时采集五个平台）');
+      console.log('  Insights: 本地Ollama中文解读已启用（默认模型 qwen3:4b，按需生成并缓存）');
       console.log('  按 Ctrl + C 停止服务器。');
       console.log('');
       if (process.env.OPENRADAR_AUTO_COLLECT !== '0') {

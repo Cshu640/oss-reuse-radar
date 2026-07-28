@@ -149,3 +149,18 @@
 - 测试：Windows `/api/gitee/search` 对 `project management`、`vue`、`若依`均返回 `projects: []` 与 `source: gitee-official-search`。
 - 下一项唯一任务：一次有止损线的Gitee精准修复，失败即外部搜索降级，然后进入五平台本地历史快照。
 - 关键文件：`server.mjs`、`platform-adapters.js`、`app.js`、交接文件。
+
+## 2026-07-28 — Phase 0.2-B.2 bounded Gitee repair and stop-loss
+- 当前阶段：Phase 0.2-B.2 — Bounded Gitee Repair & Stop-Loss
+- 分支：`phase-0.2-b.2-gitee-stoploss`
+- Functional HEAD：`55d0c70`
+- 状态：代码完成，本地测试通过；Gitee已从主线阻塞项降级为受限外部搜索源。
+- 已完成：v5、official-search、Explore三段官方路径；结构化诊断；所有路径为空时external-search止损；前端黄色受限状态；五平台隔离。
+- 未完成：用户Windows对新状态验收；历史快照；云端采集；跨平台去重。
+- 当前阻塞：无，Gitee不再阻塞主线。
+- 禁止事项：不得将外部搜索计入实时平台或增长；不得继续无限追逐Gitee内部接口；不得把探索结果冒充关键词结果。
+- 已知问题和风险：Explore页面仍可能动态化；旧PWA缓存可能需要强刷。
+- 工作区/暂存/提交/标签/推送/合并：写交接后dirty；staged none；functional commit `55d0c70`；tags none；not pushed；merge none。
+- 测试：语法、server测试、四条Gitee路径、health、diff均通过；Windows真实Explore未运行。
+- 下一项唯一任务：Phase 0.3-A本地历史快照与六小时后台采集。
+- 关键文件：`server.mjs`、`platform-adapters.js`、`app.js`、测试与交接文件。

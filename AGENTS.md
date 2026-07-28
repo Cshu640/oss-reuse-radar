@@ -12,7 +12,7 @@
 - 不得在前端暴露 GitHub Token、Supabase service role key 或模型 API key。
 - 收藏是核心功能，重构不得导致数据静默丢失。
 - 正式采用第三方项目之前必须复核许可证与维护状态。
-- Gitee在Phase 0.2-B.1用户真实浏览器验收前必须保持“实验”标识；ModelScope已通过Windows真实验收。模拟返回通过不得写成Gitee真实接口通过。
+- Gitee已在Phase 0.2-B.2采用有止损降级：官方路径无结果时只能显示“外部搜索”，不得计入实时平台或增长；ModelScope已通过Windows真实验收。
 
 ## 任务结束前
 更新 `HANDOFF.md`、`docs/PROJECT_STATE.json`，并向 `docs/HANDOFF_LOG.md` 追加历史记录，不覆盖旧记录。必须记录当前阶段、分支和HEAD、已完成、未完成、阻塞、禁止事项、已知风险、真实测试、工作区/暂存/提交/标签/推送/合并状态、下一项唯一任务和关键文件。不得把代码完成写成验收通过。

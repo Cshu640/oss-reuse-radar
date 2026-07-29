@@ -11,14 +11,20 @@
 - 不得把代理潜力分描述成真实24小时、7天或30天涨幅。
 - 真实增长必须来自 `data/history.json`；基线未达到阈值时必须显示“积累中”。
 - 跨平台增长排序必须使用平台内百分位或其他归一化方法，不得直接混比Star、Like与Downloads原始增量。
-- `data/history.json` 和 `data/insights.json` 都属于本地运行数据，不得提交到Git或打包进源码。
+- `data/history.json`、`data/insights.json`、`data/trust.json` 和 `data/identity-overrides.json` 都属于本地运行数据，不得提交到Git或打包进源码。
 - 收藏键 `openradar:favorites:v1` 是兼容底线，重构不得导致收藏静默丢失。
 - 修改历史或解读缓存schema前必须提供迁移或明确兼容策略。
 - 不得在前端暴露 GitHub Token、Supabase service role key、Ollama云端密钥或其他模型API密钥。
 - Gitee已采用止损降级：官方路径无结果时只能显示“外部搜索”，不得计入实时平台或增长。
 - ModelScope已通过Windows真实验收。
 
-## Phase 0.3-C 身份与Codex约束
+## Phase 0.4-A 可信度、身份纠错与迁移约束
+- OpenSSF Scorecard、deps.dev与OSV只作为公开风险信号；不得描述为安全认证、无漏洞证明或法律结论。
+- 必须在界面和导出中区分事实数据、规则判断、本地AI和人工确认。
+- 可信度查询只能按需运行并缓存，不得打开页面后批量轰炸免费接口。
+- 人工合并、拆分和主来源规则必须持久化到 `data/identity-overrides.json`，并进入完整备份。
+- 完整备份必须包含收藏、身份纠错、历史、Insights、Trust和Codex研究包；导入必须明确提示替换风险与重启要求。
+- `data/trust.json` 与 `data/identity-overrides.json` 都是本地运行数据，不得提交或打包进源码。
 - 跨平台身份合并必须保守：只使用同作者/项目名、显式互链或共享规范项目URL等强信号；禁止仅凭名称、简介、Topic或技术栈相似自动合并。
 - 去重实体必须保留全部原始来源ID、平台URL、指标、许可证和历史序列，不得用合并后的聚合值覆盖原来源数据。
 - 收藏、历史和解读缓存仍以原始项目ID兼容；实体ID变化不得导致收藏或缓存静默丢失。

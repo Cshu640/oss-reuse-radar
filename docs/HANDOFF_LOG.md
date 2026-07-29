@@ -239,3 +239,33 @@
 - 测试：全部语法与Manifest；history/insight回归；身份单测；Codex导出单测；server API；8来源合并6实体；3来源详情；Codex复制；390px移动端；实际8099启动、health、status、文件写入与首页HTTP均通过；用户Windows未执行。
 - 下一项唯一任务：用户迁移旧`data/history.json`和`data/insights.json`，在Windows启动Phase 0.3-C，验收真实多来源项目、统一详情和`exports/codex`两个研究文件；只修真实兼容问题。
 - 关键文件：`project-identity.js`、`codex-packet.js`、`codex-export-service.mjs`、`server.mjs`、`app.js`、`platform-adapters.js`、`index.html`、`styles.css`、`tests/project_identity_test.mjs`、`tests/codex_export_test.mjs`、交接文件。
+
+## 2026-07-29 — Phase 0.3-C user acceptance
+- 当前阶段：Phase 0.3-C — Cross-Platform Identity, Unified Details & Codex Research Packets
+- 分支：`phase-0.3-c-dedup-details-codex`
+- HEAD：`8ca6835`（用户使用的已打包版本）
+- 状态：用户Windows真实验收通过。DeepSeek-R1成功合并GitHub、Hugging Face、ModelScope三个来源，详情页显示`3 SOURCES`；Codex研究包目录真实生成`RESEARCH_TASK.md`和`project-context.json`。
+- 已完成：真实三来源合并、统一详情、原始指标保留、研究任务生成、剪贴板复制、本地文件落盘。
+- 未完成：人工身份纠错、来源卡对比度、可信度初筛、完整数据迁移、MCP。
+- 当前阻塞：无；主来源卡文字对比度为已知UI问题。
+- 禁止事项：不得把研究包生成写成Codex已完成研究；不得把自动合并写成人工官方确认。
+- 已知问题和风险：主来源高亮背景过亮，部分文字对比度不足。
+- 工作区/暂存/提交/标签/推送/合并：用户机器Git状态未检查；开发版本HEAD `8ca6835`；tags none；not pushed；merge none。
+- 测试：Windows Edge真实DeepSeek-R1三来源合并；统一详情；Codex两个文件实际存在。
+- 下一项唯一任务：Phase 0.4-A可信度、人工纠错、来源卡对比度和完整备份迁移。
+- 关键文件：`project-identity.js`、`app.js`、`styles.css`、`codex-packet.js`、`exports/codex/`。
+
+## 2026-07-29 — Phase 0.4-A trust, correction and portability
+- 当前阶段：Phase 0.4-A — Trust, Correction & Portability
+- 分支：`phase-0.4-a-trust-correction-portability`
+- Functional HEAD：`98c5ebe`
+- 当前状态：功能代码完成；本地语法、单元、服务API、文件持久化、桌面/移动模拟浏览器和实际Node启动通过；用户Windows与真实OpenSSF/deps.dev/OSV未验收。
+- 已完成：来源卡对比度；人工合并/拆分/主来源；IdentityStore；OpenSSF Scorecard；deps.dev映射；OSV Querybatch；TrustStore；事实/规则/本地AI/人工确认标签；可信度面板；Codex Trust上下文；完整备份导出与替换式导入；Codex研究包迁移；PWA缓存v9。
+- 未完成：Windows真实Trust API；身份规则重启验收；完整备份恢复验收；冲突合并导入；软件包生态；项目对比器；MCP；云采集；长期增长。
+- 当前阻塞：开发容器不能访问真实Trust上游；需要用户Windows验证。
+- 禁止事项：不得称自动评分为安全认证；不得把无OSV结果写成无漏洞；不得批量轰炸免费API；不得静默覆盖数据；不得将Mock写成真实API通过。
+- 已知问题和风险：三套公共数据覆盖不完整；规则分是本地启发式；导入后必须重启；人工规则可能随项目ID变化失效。
+- 工作区/暂存/提交/标签/推送/合并：functional commit后clean；写README/AGENTS/交接后dirty；staged none；functional commit `98c5ebe`；tags none；not pushed，origin为本地0.3-C bundle；merge none。
+- 测试：全部JS/MJS语法；identity store；自动阻断和人工合并；mock Scorecard/deps.dev/OSV；Trust缓存；完整备份恢复；History/Insights/Codex回归；Server API；桌面/390px；主来源样式；实际8110 Node、health、trust/backup/identity status与首页HTTP均通过；真实Trust上游未执行。
+- 下一项唯一任务：Windows验收来源卡、人工纠错持久化、一个GitHub真实Trust审计和完整备份恢复，只修兼容问题。
+- 关键文件：`identity-store.mjs`、`trust-store.mjs`、`trust-service.mjs`、`backup-service.mjs`、`server.mjs`、`app.js`、`styles.css`、测试与交接文件。

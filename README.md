@@ -105,7 +105,7 @@ openradar:identity-overrides:v1
 4. 启动新版；
 5. 点击“导入备份”；
 6. 确认替换新版目录中的本地数据；
-7. 关闭并重新运行 `start-openradar.cmd`。
+7. 关闭并重新运行 `START-OPENRADAR.bat`。
 
 从0.3-C或更早版本升级且没有完整备份时，仍可手工复制：
 
@@ -120,11 +120,23 @@ data/insights.json
 
 ### Windows
 
-双击：
+优先双击：
+
+```text
+START-OPENRADAR.bat
+```
+
+也可以双击兼容入口：
 
 ```text
 start-openradar.cmd
 ```
+
+启动器会先检查`server.mjs`与Node.js，再延迟打开浏览器。服务器停止、端口冲突或路径错误时，窗口会停留并显示英文错误，不会再静默闪退。
+
+若从ZIP解压后的最外层目录启动，请使用压缩包根目录的`START-OPENRADAR.bat`，它会自动定位里面的`open-source-radar`文件夹。
+
+如果双击仍被Windows阻止：右键原ZIP → 属性 → 勾选“解除锁定” → 确定，然后重新完整解压。
 
 ### 命令行
 

@@ -284,3 +284,33 @@
 - 测试：8套Node测试全部通过；实际8111服务与health通过；三个启动器均为DOS batch ASCII CRLF；Windows双击未执行。
 - 下一项唯一任务：用户完整解压修正版，从最外层双击`START-OPENRADAR.bat`并报告可见窗口结果。
 - 关键文件：`START-OPENRADAR.bat`、`start-openradar.cmd`、`run-openradar-server.cmd`、`README.md`、交接文件。
+
+## 2026-07-29 — Phase 0.4-A.1 user acceptance
+- 当前阶段：Phase 0.4-A.1 — Windows Launcher Reliability Hotfix
+- 分支：`phase-0.4-a.1-launcher-fix`
+- HEAD：`009797f`（用户使用的已打包版本）
+- 状态：用户Windows真实验收通过。外层双击启动器、来源卡对比度、人工设置Hugging Face主来源、可信度审计公开数据不足降级和完整备份JSON下载全部通过。
+- 已完成：Windows启动器、人工主来源、Trust运行与降级、完整备份、原数据兼容。
+- 未完成：软件包生态、项目对比器、MCP、云采集。
+- 当前阻塞：无；公共Trust数据覆盖不足属于外部数据边界。
+- 禁止事项：不得将无OpenSSF/OSV/deps.dev结果写成项目安全；不得把备份下载写成恢复流程已验收。
+- 已知问题和风险：部分项目没有公开Trust记录；非软件包项目可能无法映射OSV。
+- 工作区/暂存/提交/标签/推送/合并：用户机器Git状态未检查；开发HEAD `009797f`；tags none；not pushed；merge none。
+- 测试：用户Windows截图确认启动、人工主来源、可信度面板与完整备份下载。
+- 下一项唯一任务：Phase 0.4-B软件包生态雷达与多项目对比器。
+- 关键文件：`START-OPENRADAR.bat`、`trust-service.mjs`、`backup-service.mjs`、`identity-store.mjs`、`app.js`。
+
+## 2026-07-29 — Phase 0.4-B package ecosystem radar and comparator
+- 当前阶段：Phase 0.4-B — Package Ecosystem Radar & Multi-Project Comparator
+- 分支：`phase-0.4-b-package-ecosystem-comparator`
+- Functional HEAD：`fd44b7f`
+- 当前状态：功能代码完成；Node单元/服务回归、实际本地服务、桌面与390px模拟浏览器通过；用户Windows真实软件包API未验收。
+- 已完成：npm、PyPI、crates.io适配；本地软件包API；软件包雷达；搜索和历史集成；强信号仓库合并；2至5项目对比；规则推荐；串行Trust审计；对比备份；PWA v10。
+- 未完成：Windows真实三生态召回；真实限频字段；自然时间增长；更强归一化；依赖树；可调权重；MCP；云采集。
+- 当前阻塞：开发容器npm/crates出站失败、PyPI无召回；需要用户Windows验证；长期增长需自然时间。
+- 禁止事项：不得把PyPI辅助下载当官方数据；不得直接混比不同生态原始下载；不得把综合分写成安全/性能/法律结论；不得弱信号合并；不得将Mock写成真实API通过。
+- 已知问题和风险：PyPI搜索召回可能较弱；开放数据源可能限频；下载指标口径不同；缺少Trust时对比使用中性分；首次刷新请求更多。
+- 工作区/暂存/提交/标签/推送/合并：functional commit `fd44b7f`；交接提交后working tree clean；staged none；tags none；not pushed；origin为本地0.4-A.1 bundle；merge none。
+- 测试：10套Node测试；软件包服务；对比器；Server三API；9平台桌面和390px移动端；实际8112服务、health、package status和index HTTP 200；真实上游未通过开发环境验证。
+- 下一项唯一任务：用户用完整备份升级Phase 0.4-B，在Windows分别测试npm、PyPI、crates.io和2至5项目对比，只修真实兼容问题。
+- 关键文件：`package-service.mjs`、`project-comparator.js`、`platform-adapters.js`、`server.mjs`、`app.js`、`index.html`、`styles.css`、四套新增/扩展测试与交接文件。

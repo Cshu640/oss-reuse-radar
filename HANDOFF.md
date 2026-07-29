@@ -1,161 +1,85 @@
 # OpenRadar Handoff
 
 ## 当前阶段
-Phase 0.4-A — Trust, Correction & Portability
+Phase 0.4-A.1 — Windows Launcher Reliability Hotfix
 
 ## 分支和 HEAD
-- Branch：`phase-0.4-a-trust-correction-portability`
-- Functional HEAD：`98c5ebe`
+- Branch：`phase-0.4-a.1-launcher-fix`
+- Functional HEAD：`31777f6`
 - 当前HEAD：交接提交后再次同步
 
 ## 当前状态
-Phase 0.3-C已由用户在Windows真实验收：DeepSeek-R1成功合并GitHub、Hugging Face和ModelScope三个来源；统一详情页、Codex研究包、本地两个文件和剪贴板复制均通过。已知来源主卡对比度问题在本阶段修复。
+Phase 0.4-A功能本身没有改动。本热修仅修复Windows双击启动器：用户反馈新版`start-openradar.cmd`双击无反应，但手动执行`node server.mjs`能够正常启动，说明主程序、Node.js和端口链路基本正常，故障范围被限定为发布包启动器体验。
 
-Phase 0.4-A功能代码已完成。本地语法、单元、服务器API、文件持久化、桌面/移动模拟浏览器与实际Node启动测试通过；用户Windows及真实OpenSSF Scorecard、deps.dev、OSV上游尚未验收，不能写成正式通过。
+已新增`START-OPENRADAR.bat`与`run-openradar-server.cmd`，并重写兼容入口`start-openradar.cmd`。新版启动器会检查`server.mjs`与Node.js、延迟打开浏览器，并在路径错误、Node缺失、端口冲突或服务退出时保留可见窗口和错误信息，不再静默闪退。
 
-本阶段新增三条能力：
-1. 免费可信度与供应链初筛；
-2. 人工合并、拆分和主来源纠错；
-3. 收藏、历史、AI解读、可信度报告、身份规则与Codex研究包完整备份/导入。
-
-界面明确区分事实数据、OpenRadar规则判断、本地AI和人工确认。自动可信度结果不是安全认证或法律结论。
+Linux开发容器无法真实执行Windows批处理双击，因此当前只能写成代码与静态兼容检查通过，等待用户Windows验收。
 
 ## 已完成
-- 修复主来源卡片高亮背景与文字对比度
-- 人工合并两个项目实体
-- 将误合并来源拆出
-- 手动指定主来源
-- 清除项目相关人工身份规则
-- `IdentityStore`与`data/identity-overrides.json`
-- 浏览器身份规则兼容键`openradar:identity-overrides:v1`
-- 人工规则进入实体重建、详情页和完整备份
-- OpenSSF Scorecard公开评分与检查项读取
-- deps.dev项目、软件包版本与许可证映射
-- OSV Querybatch已映射版本漏洞查询
-- 可信度24小时缓存与串行按需审计
-- `TrustStore`与`data/trust.json`
-- 可信度规则分、积极信号、风险缺口、低分检查和OSV关联展示
-- 事实、规则、本地AI和人工确认来源标签
-- Codex研究包包含可信度初筛上下文
-- `BackupService`完整导出与导入
-- 备份收藏、筛选设置、身份纠错、历史、Insights、Trust和Codex研究包
-- 导入替换确认与重启提示
-- 静态模式浏览器数据备份降级
-- 新版观察名单状态面板
-- Service Worker v9与雷达缓存v9
-- Phase 0.3-C用户真实验收记录
+- 新增推荐启动器`START-OPENRADAR.bat`
+- 重写兼容入口`start-openradar.cmd`
+- 新增`run-openradar-server.cmd`错误保留层
+- 启动前检查`server.mjs`
+- 启动前检查Node.js PATH
+- 延迟2秒自动打开`http://localhost:8080`
+- 服务退出或启动失败后显示退出码并暂停
+- 端口占用提示
+- 三个批处理文件改为ASCII命令与CRLF行尾
+- README更新双击、外层目录与Windows解除锁定说明
+- Phase 0.4-A全部Node测试回归通过
+- 实际Node服务与`/api/health`回归通过
 
 ## 未完成
-- 用户Windows Phase 0.4-A真实验收
-- 真实OpenSSF Scorecard返回验证
-- 真实deps.dev项目与软件包映射验证
-- 真实OSV查询验证
-- Windows人工合并、拆分和主来源重启持久化验收
-- Windows完整备份导出、导入和重启恢复验收
-- 完整备份冲突合并模式；当前为替换式恢复
-- 更细致漏洞严重度、受影响范围和修复版本解释
-- 软件包生态雷达
-- 项目对比器
-- Codex MCP
-- 云端无人值守采集
-- 自然时间7天和30天增长最终验收
+- 用户Windows双击`START-OPENRADAR.bat`验收
+- 用户Windows双击兼容入口`start-openradar.cmd`验收
+- 下载ZIP的Mark-of-the-Web/SmartScreen真实行为验收
+- Phase 0.4-A原有真实Trust API、人工纠错与完整恢复验收
 
 ## 当前阻塞
-- 开发容器无法访问真实OpenSSF、deps.dev与OSV上游，需要用户Windows网络验证
-- 长周期增长需要自然时间
+- 开发环境没有Windows CMD/SmartScreen，无法执行真实双击验收
 
 ## 禁止事项
-- 不得把Scorecard分数写成安全认证
-- 不得把OSV未返回漏洞写成项目无漏洞
-- 不得把deps.dev未映射软件包写成项目没有依赖
-- 不得把规则分与第三方事实混为同一来源
-- 不得自动批量审计全部项目或滥用免费API
-- 不得因名称、简介或Topic相似自动合并
-- 不得丢弃原始来源ID、指标、许可证或历史
-- 不得让导入静默覆盖数据，必须用户确认
-- 不得提交`data/*.json`或`exports/codex/*`
-- 不得修改收藏键`openradar:favorites:v1`
-- 不得把代码完成、本地模拟或API Mock写成Windows真实验收
-- 不得进入下一阶段，直到本阶段真实兼容问题得到处理或明确止损
+- 不得把Linux静态检查写成Windows双击通过
+- 不得修改或丢失Phase 0.4-A的历史、收藏、Insights、Trust、Identity和Codex数据兼容
+- 不得让启动器静默关闭而不给用户错误信息
+- 不得使用依赖PowerShell执行策略的`.ps1`作为唯一入口
+- 不得进入Phase 0.4-B，直到启动器和Phase 0.4-A真实兼容问题验收或止损
 
 ## 已知问题和风险
-- Scorecard只覆盖其已计算或可识别的项目，404或无结果可能是数据缺失
-- deps.dev项目与软件包映射覆盖不完整
-- OSV查询依赖准确的软件包生态、名称和版本
-- 一个漏洞ID不等于当前部署一定可利用，仍需核对版本和路径
-- Trust规则分是OpenRadar本地启发式，不是行业标准分
-- 人工规则依赖平台项目ID，项目迁移或改名后可能失效
-- 手工拆分通过阻止来源对自动合并；复杂传递关系仍需人工检查
-- 完整导入当前替换服务器数据，不做逐条冲突合并
-- 导入后必须重启Node服务
-- 大量Codex研究包会增加备份文件体积
-- 本地服务器关闭或电脑睡眠时历史仍会有缺口
+- Windows可能对从互联网下载的ZIP传播Mark-of-the-Web，用户可能需要在ZIP属性中“解除锁定”后重新解压
+- 8080端口被旧版OpenRadar占用时，新服务会失败，但新版窗口应保留并提示
+- `START-OPENRADAR.bat`使用Windows自带PowerShell仅用于延迟打开浏览器；即使该步骤失败，Node服务仍应继续启动
+- 用户仍可能在压缩包预览中直接双击，必须完整解压后运行
 
 ## 测试
-- 全部JS/MJS语法检查：通过
-- Manifest与项目状态JSON解析：通过
-- `tests/project_identity_test.mjs`：通过
-  - 自动合并回归
-  - 阻止自动合并
-  - 人工跨作者合并
-  - 人工主来源
-- `tests/identity_store_test.mjs`：通过
-- `tests/trust_service_test.mjs`：通过
-  - Mock Scorecard
-  - Mock deps.dev映射
-  - Mock OSV漏洞
-  - 规则评估与24小时缓存
-- `tests/backup_service_test.mjs`：通过
-  - 全部服务器数据导出
-  - Codex研究包迁移
-  - 新目录恢复
-- 历史与Ollama Insights回归：通过
-- Codex研究包回归与Trust上下文：通过
-- `tests/server_test.mjs`：通过
-  - Identity、Trust、Backup API
-  - 既有Gitee、History、Insights、Codex API
-- `tests/browser_mock_test.py`：通过
-  - 桌面与390px移动端
-  - Trust展示
-  - 人工纠错控件
-  - 完整备份入口
-  - 主来源深色可读样式
-  - 无横向溢出
-- 实际`PORT=8110 OPENRADAR_AUTO_COLLECT=0 node server.mjs`：通过
-- 实际`/api/health`：HTTP 200，version `0.4-A`，identity/trust/backup均为true
-- 实际Trust、Backup、Identity状态接口：HTTP 200
-- 实际首页：HTTP 200
+- Phase 0.4-A八套Node测试：8/8通过
+- `node --check server.mjs`：通过
+- 实际`PORT=8111 OPENRADAR_AUTO_COLLECT=0 node server.mjs`：通过
+- 实际`/api/health`：HTTP 200，version `0.4-A`
+- `START-OPENRADAR.bat`：DOS batch、ASCII、CRLF
+- `start-openradar.cmd`：DOS batch、ASCII、CRLF
+- `run-openradar-server.cmd`：DOS batch、ASCII、CRLF
 - `git diff --check`：通过
-- 真实外部Trust API：未执行
-- 用户Windows Phase 0.4-A：未执行
+- Windows双击：未执行
 
 ## Git 状态
-- Functional commit：`98c5ebe feat: add trust audits identity corrections and full backups`
-- Working tree：功能提交后clean；写README、AGENTS与交接后dirty
+- Functional commit：`31777f6 fix: make Windows launcher visible and reliable`
+- Working tree：写交接前clean；写AGENTS、HANDOFF与状态后dirty
 - Staged：none
 - Tags：none
-- Push：not pushed；origin为本地Phase 0.3-C bundle
+- Push：not pushed；origin为本地Phase 0.4-A bundle
 - Merge：none
 
 ## 下一项唯一任务
-用户在Windows运行Phase 0.4-A，依次验收来源卡对比度、人工主来源或拆分后的重启持久化、一个GitHub项目的真实免费可信度审计、完整备份导出与测试目录导入恢复。只修复真实接口、字段、持久化或迁移问题；验收前不进入软件包生态或项目对比器。
+用户完整解压Phase 0.4-A.1修正版，从最外层双击`START-OPENRADAR.bat`，确认服务器窗口可见、浏览器自动打开、Phase 0.4-A页面正常；若仍失败，记录保留窗口中的精确错误，只修启动器兼容问题。
 
 ## 关键文件
-- `project-identity.js`
-- `identity-store.mjs`
-- `trust-store.mjs`
-- `trust-service.mjs`
-- `backup-service.mjs`
+- `START-OPENRADAR.bat`
+- `start-openradar.cmd`
+- `run-openradar-server.cmd`
 - `server.mjs`
-- `app.js`
-- `styles.css`
-- `codex-packet.js`
-- `codex-export-service.mjs`
-- `tests/project_identity_test.mjs`
-- `tests/identity_store_test.mjs`
-- `tests/trust_service_test.mjs`
-- `tests/backup_service_test.mjs`
-- `tests/server_test.mjs`
-- `tests/browser_mock_test.py`
-- `data/identity-overrides.json`（运行时，不提交）
-- `data/trust.json`（运行时，不提交）
+- `README.md`
+- `AGENTS.md`
+- `HANDOFF.md`
+- `docs/PROJECT_STATE.json`
+- `docs/HANDOFF_LOG.md`

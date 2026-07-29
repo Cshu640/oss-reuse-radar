@@ -269,3 +269,18 @@
 - 测试：全部JS/MJS语法；identity store；自动阻断和人工合并；mock Scorecard/deps.dev/OSV；Trust缓存；完整备份恢复；History/Insights/Codex回归；Server API；桌面/390px；主来源样式；实际8110 Node、health、trust/backup/identity status与首页HTTP均通过；真实Trust上游未执行。
 - 下一项唯一任务：Windows验收来源卡、人工纠错持久化、一个GitHub真实Trust审计和完整备份恢复，只修兼容问题。
 - 关键文件：`identity-store.mjs`、`trust-store.mjs`、`trust-service.mjs`、`backup-service.mjs`、`server.mjs`、`app.js`、`styles.css`、测试与交接文件。
+
+## 2026-07-29 — Phase 0.4-A.1 Windows launcher reliability hotfix
+- 当前阶段：Phase 0.4-A.1 — Windows Launcher Reliability Hotfix
+- 分支：`phase-0.4-a.1-launcher-fix`
+- Functional HEAD：`31777f6`
+- 当前状态：启动器热修代码完成；Phase 0.4-A主程序回归通过；Windows双击尚未验收。
+- 已完成：新增`START-OPENRADAR.bat`；重写`start-openradar.cmd`；新增`run-openradar-server.cmd`；路径与Node检查；延迟打开浏览器；错误窗口保留；退出码与端口提示；ASCII命令与CRLF；README说明。
+- 未完成：Windows双击、SmartScreen/MOTW、Phase 0.4-A真实Trust/Identity/Backup验收。
+- 当前阻塞：开发容器无Windows CMD与SmartScreen。
+- 禁止事项：不得把静态检查写成Windows通过；不得破坏0.4-A数据兼容；不得静默闪退；不得提前进入0.4-B。
+- 已知问题和风险：下载ZIP可能需解除锁定；8080可能被旧服务占用；必须完整解压后运行。
+- 工作区/暂存/提交/标签/推送/合并：functional commit `31777f6`；写交接后dirty；staged none；tags none；not pushed；merge none。
+- 测试：8套Node测试全部通过；实际8111服务与health通过；三个启动器均为DOS batch ASCII CRLF；Windows双击未执行。
+- 下一项唯一任务：用户完整解压修正版，从最外层双击`START-OPENRADAR.bat`并报告可见窗口结果。
+- 关键文件：`START-OPENRADAR.bat`、`start-openradar.cmd`、`run-openradar-server.cmd`、`README.md`、交接文件。

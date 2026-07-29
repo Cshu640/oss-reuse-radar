@@ -5,6 +5,9 @@ const PLATFORM_PRIORITY = {
   gitee: 70,
   huggingface: 60,
   modelscope: 50,
+  npm: 45,
+  pypi: 44,
+  crates: 43,
 };
 
 const REPOSITORY_HOSTS = new Set(['github.com', 'gitlab.com', 'codeberg.org', 'gitee.com']);

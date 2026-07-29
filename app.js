@@ -1,11 +1,13 @@
 import { platformCatalog, platformIds, radarPlatform, searchPlatform } from './platform-adapters.js';
 import { deduplicationStats, entitiesOverlap, entityLookupIds, findEntityById, mergeProjectEntities, projectSources } from './project-identity.js';
 import { buildCodexResearchTask, codexExportSlug } from './codex-packet.js';
+import { compareProjects } from './project-comparator.js';
 
 const FAVORITES_KEY = 'openradar:favorites:v1';
-const RADAR_CACHE_KEY = 'openradar:radar-cache:v9';
+const RADAR_CACHE_KEY = 'openradar:radar-cache:v10';
 const IDENTITY_OVERRIDES_KEY = 'openradar:identity-overrides:v1';
-const APP_VERSION = '0.4-A';
+const COMPARE_KEY = 'openradar:compare:v1';
+const APP_VERSION = '0.4-B';
 const HISTORY_PERIOD_MAP = { today: 'day', week: 'week', month: 'month' };
 const HISTORY_TARGET_HOURS = { day: 24, week: 168, month: 720 };
 const HISTORY_COPY = {
@@ -30,6 +32,7 @@ const categories = [
   '办公效率',
   '生活工具',
   '商业应用底座',
+  '开发组件',
 ];
 
 const categoryRules = [
@@ -43,6 +46,7 @@ const categoryRules = [
   ['办公效率', ['office', 'productivity', 'document', 'pdf', 'ocr', 'spreadsheet', 'presentation', 'calendar', 'email', 'meeting', 'notes', 'knowledge base', 'kanban', 'project management', 'task management', 'collaboration', 'file manager', 'markdown editor']],
   ['生活工具', ['personal finance', 'budget', 'expense', 'health', 'fitness', 'sleep', 'recipe', 'meal planner', 'shopping list', 'travel', 'trip planner', 'itinerary', 'home automation', 'smart home', 'photo management', 'media server', 'password manager', 'habit', 'journal', 'family', 'parenting', 'pet', 'grocery']],
   ['商业应用底座', ['saas', 'crm', 'erp', 'ecommerce', 'e-commerce', 'billing', 'invoice', 'booking', 'marketplace', 'customer support', 'admin dashboard', 'multi-tenant', 'inventory management', 'point of sale']],
+  ['开发组件', ['npm', 'pypi', 'crates.io', 'package', 'library', 'sdk', 'framework', 'plugin', 'middleware', 'dependency', 'component']],
   ['游戏开发', ['game', 'godot', 'phaser', 'pixi', 'roguelike', 'rpg', 'game engine', 'level editor', 'procedural generation']],
   ['Web与App', ['typescript', 'javascript', 'react', 'next.js', 'web app', 'pwa', 'mobile app', 'desktop app', 'frontend', 'backend']],
 ];
@@ -98,6 +102,8 @@ const suggestions = [
   '适合个人部署的记账和家庭财务系统',
   '旅行规划、行程管理与地图工具',
   '适合Codex二次开发的CRM或SaaS底座',
+  'TypeScript NPC memory package',
+  'Python PDF OCR package',
 ];
 
 const seed = [
@@ -193,6 +199,15 @@ function loadIdentityOverrides() {
   }
 }
 
+function loadCompareItems() {
+  try {
+    const value = JSON.parse(localStorage.getItem(COMPARE_KEY) || '[]');
+    return Array.isArray(value) ? value.slice(0, 5) : [];
+  } catch {
+    return [];
+  }
+}
+
 const state = {
   rawProjects: seed.map(normalizeProject),
   projects: mergeProjectEntities(seed.map(normalizeProject)).map(normalizeProject),
@@ -222,6 +237,11 @@ const state = {
   trustServiceAvailable: false,
   trustLoadingId: '',
   backupAvailable: false,
+  packageServiceAvailable: false,
+  packageSearchResults: [],
+  packageSourceStatus: {},
+  compareItems: loadCompareItems().map(normalizeProject),
+  compareAuditing: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -239,6 +259,42 @@ function loadFavorites() {
 function persistFavorites() {
   localStorage.setItem(FAVORITES_KEY, JSON.stringify(state.favorites));
   updateCounters();
+}
+
+function persistCompareItems() {
+  state.compareItems = state.compareItems.slice(0, 5).map(normalizeProject);
+  localStorage.setItem(COMPARE_KEY, JSON.stringify(state.compareItems));
+  updateCounters();
+  if (document.getElementById('compareView')?.classList.contains('active')) renderCompare();
+  if (document.getElementById('packagesView')?.classList.contains('active')) renderPackageRadar();
+}
+
+function comparedProject(project) {
+  return state.compareItems.find((item) => entitiesOverlap(item, project)) || null;
+}
+
+function toggleCompare(project) {
+  const existing = comparedProject(project);
+  if (existing) {
+    state.compareItems = state.compareItems.filter((item) => !entitiesOverlap(item, project));
+    persistCompareItems();
+    toast('已移出对比');
+    return;
+  }
+  if (state.compareItems.length >= 5) {
+    toast('最多同时对比5个项目');
+    return;
+  }
+  state.compareItems = [...state.compareItems, normalizeProject(project)];
+  persistCompareItems();
+  toast(state.compareItems.length >= 2 ? '已加入对比，可打开项目对比页' : '已加入对比，再选一个即可比较');
+}
+
+function liveCompareItems() {
+  return state.compareItems.map((item) => {
+    const live = [...state.projects, ...state.results, ...state.packageSearchResults].find((candidate) => entitiesOverlap(candidate, item));
+    return normalizeProject(live || item);
+  }).slice(0, 5);
 }
 
 function identityHasRules(value = state.identityOverrides) {
@@ -625,6 +681,8 @@ function findProject(id) {
     || findEntityById(state.favorites, id)
     || state.rawProjects.find((item) => item.id === id)
     || state.rawResults.find((item) => item.id === id)
+    || state.packageSearchResults.find((item) => entityLookupIds(item).includes(id) || projectKey(item) === id)
+    || state.compareItems.find((item) => entityLookupIds(item).includes(id) || projectKey(item) === id)
     || null;
 }
 
@@ -668,14 +726,16 @@ function projectCard(project, saved = false, showGrowth = false) {
   const plainSummary = insight?.summary || rulePlainSummary(project);
   const insightLabel = insightSourceLabel(insight);
   const mergedBadge = project.sourceCount > 1 ? `<span class="badge merged">已合并 ${project.sourceCount} 个来源</span>` : '';
+  const compared = Boolean(comparedProject(project));
+  const versionBadge = project.version ? `<span class="badge">v${escapeHtml(project.version)}</span>` : '';
 
-  return `<article class="card">
+  return `<article class="card ${compared ? 'is-compared' : ''}">
     <div class="card-top">
       ${avatar}
       <div class="title"><button class="title-link" data-detail="${escapeHtml(key)}" title="查看 ${escapeHtml(`${project.owner}/${project.name}`)} 详情">${escapeHtml(project.name)}</button><p>${escapeHtml(project.owner)} · 更新于${timeAgo(project.updatedAt)}</p></div>
       <button class="star ${favorite ? 'saved' : ''}" data-favorite="${escapeHtml(key)}" aria-label="收藏项目">${favorite ? '★' : '☆'}</button>
     </div>
-    <div class="source-row">${sourceBadgeRow(project)}${mergedBadge}</div>
+    <div class="source-row">${sourceBadgeRow(project)}${mergedBadge}${versionBadge}</div>
     <p class="desc">${escapeHtml(project.description || '暂无描述，需要进一步读取项目文档。')}</p>
     <div class="plain-summary ${insight?.source === 'ollama' ? 'ai' : 'rule'}"><span>${escapeHtml(insightLabel)}</span><p>${escapeHtml(plainSummary)}</p></div>
     <div class="badges">
@@ -696,6 +756,7 @@ function projectCard(project, saved = false, showGrowth = false) {
     <div class="actions">
       <button data-detail="${escapeHtml(key)}">查看详情</button>
       <button data-analyze="${escapeHtml(key)}">中文解读</button>
+      <button class="compare-toggle ${compared ? 'active' : ''}" data-compare="${escapeHtml(key)}">${compared ? '移出对比' : '加入对比'}</button>
       <a href="${escapeHtml(project.url)}" target="_blank" rel="noopener">打开主源</a>
       ${saved ? `<button data-remove="${escapeHtml(key)}">移出收藏</button>` : ''}
     </div>
@@ -721,6 +782,17 @@ function bindProjectActions(root) {
   });
   root.querySelectorAll('[data-analyze]').forEach((button) => {
     button.onclick = () => openInsightDialog(button.dataset.analyze);
+  });
+  root.querySelectorAll('[data-compare]').forEach((button) => {
+    button.onclick = () => {
+      const project = findProject(button.dataset.compare);
+      if (!project) return;
+      toggleCompare(project);
+      if (root === els.projectGrid) renderRadar();
+      if (root === els.searchGrid) renderResults();
+      if (root === els.favoriteGrid) renderFavorites();
+      if (root === els.packageGrid) renderPackageRadar();
+    };
   });
   root.querySelectorAll('[data-detail]').forEach((button) => {
     button.onclick = () => openProjectDetail(button.dataset.detail);
@@ -828,6 +900,8 @@ async function loadCachedTrust(project) {
     const response = await fetchJsonSafe(`/api/trust?ids=${encodeURIComponent(ids.join(','))}`);
     Object.assign(state.trustReports, response.reports || {});
     if (state.activeDetailId) renderDetail();
+  if (document.getElementById('packagesView')?.classList.contains('active')) renderPackageRadar();
+  if (document.getElementById('compareView')?.classList.contains('active')) renderCompare();
   } catch {
     // Trust is optional and must not block project details.
   }
@@ -906,12 +980,15 @@ function backupClientState() {
   return {
     favorites: state.favorites,
     identityOverrides: state.identityOverrides,
+    compareItems: state.compareItems,
     settings: {
       category: state.category,
       period: state.period,
       platform: els.platform?.value || 'all',
       license: els.license?.value || 'all',
       useType: els.useType?.value || 'all',
+      packageEcosystem: els.packageEcosystem?.value || 'all',
+      packageSort: els.packageSort?.value || 'downloads',
     },
   };
 }
@@ -977,7 +1054,9 @@ async function importFullBackupFile(file) {
     }
     state.favorites = (Array.isArray(clientState.favorites) ? clientState.favorites : []).map(normalizeProject);
     state.identityOverrides = normalizeIdentityOverrides(clientState.identityOverrides || {});
+    state.compareItems = (Array.isArray(clientState.compareItems) ? clientState.compareItems : []).slice(0, 5).map(normalizeProject);
     localStorage.setItem(FAVORITES_KEY, JSON.stringify(state.favorites));
+    localStorage.setItem(COMPARE_KEY, JSON.stringify(state.compareItems));
     persistIdentityLocal();
     const settings = clientState.settings || {};
     if (categories.includes(settings.category)) state.category = settings.category;
@@ -985,6 +1064,8 @@ async function importFullBackupFile(file) {
     if ([...els.platform.options].some((option) => option.value === settings.platform)) els.platform.value = settings.platform;
     if ([...els.license.options].some((option) => option.value === settings.license)) els.license.value = settings.license;
     if ([...els.useType.options].some((option) => option.value === settings.useType)) els.useType.value = settings.useType;
+    if (els.packageEcosystem && [...els.packageEcosystem.options].some((option) => option.value === settings.packageEcosystem)) els.packageEcosystem.value = settings.packageEcosystem;
+    if (els.packageSort && [...els.packageSort.options].some((option) => option.value === settings.packageSort)) els.packageSort.value = settings.packageSort;
     rebuildEntities();
     alert(`${message}\n\n请关闭黑色服务器窗口并重新运行 start-openradar.cmd，以重新载入历史、解读和可信度缓存。`);
   } catch (error) {
@@ -1052,7 +1133,7 @@ function renderDetail() {
 
   els.detailContent.innerHTML = `<div class="detail-back-row"><button id="detailBack">← 返回</button><button data-share-detail>复制详情链接</button></div>
     <article class="detail-hero">
-      <div><em>UNIFIED OPEN-SOURCE PROFILE</em><div class="detail-title-row"><h1>${escapeHtml(project.name)}</h1><button class="star ${favorite ? 'saved' : ''}" data-favorite="${escapeHtml(projectKey(project))}">${favorite ? '★' : '☆'}</button></div><p>${escapeHtml(project.owner || '未知作者')} · ${project.sourceCount || 1} 个平台来源 · 更新于${escapeHtml(timeAgo(project.updatedAt))}</p></div>
+      <div><em>UNIFIED OPEN-SOURCE PROFILE</em><div class="detail-title-row"><h1>${escapeHtml(project.name)}</h1><button class="star ${favorite ? 'saved' : ''}" data-favorite="${escapeHtml(projectKey(project))}">${favorite ? '★' : '☆'}</button></div><p>${escapeHtml(project.owner || '未知作者')} · ${project.sourceCount || 1} 个平台来源 · 更新于${escapeHtml(timeAgo(project.updatedAt))}</p><button class="detail-compare ${comparedProject(project) ? 'active' : ''}" data-detail-compare>${comparedProject(project) ? '✓ 已加入项目对比' : '＋ 加入项目对比'}</button></div>
       <div class="detail-score"><span>综合潜力</span><b>${potentialScore(project)}</b></div>
     </article>
     <div class="detail-badges"><span class="badge">${escapeHtml(project.category || classifyCategory(project))}</span>${useBadges}${languages.map((language) => `<span class="badge">${escapeHtml(language)}</span>`).join('')}${licenseVariants.map((license) => `<span class="badge ${commercialFriendly(license) ? 'good' : 'warn'}">${escapeHtml(license)}</span>`).join('')}</div>
@@ -1070,6 +1151,7 @@ function renderDetail() {
   els.detailContent.querySelector('[data-favorite]').onclick = () => openFavoriteDialog(projectKey(project));
   els.detailContent.querySelector('[data-analyze]').onclick = () => openInsightDialog(projectKey(project));
   els.detailContent.querySelector('[data-trust]').onclick = () => void analyzeTrust(project, Boolean(trust));
+  els.detailContent.querySelector('[data-detail-compare]').onclick = () => { toggleCompare(project); renderDetail(); };
   els.detailContent.querySelector('[data-codex]').onclick = () => void prepareCodexResearch(project);
   els.detailContent.querySelectorAll('[data-set-primary]').forEach((button) => {
     button.onclick = async () => {
@@ -1130,6 +1212,162 @@ function openHashProject() {
   if (!project) return false;
   openProjectDetail(id, false);
   return true;
+}
+
+function isPackageSource(project) {
+  return Boolean(project?.packageSystem || ['npm', 'pypi', 'crates'].includes(project?.platform));
+}
+
+function packageSources(project) {
+  return entitySources(project).filter(isPackageSource);
+}
+
+function packageAggregate(project, fields) {
+  return Math.max(0, ...packageSources(project).flatMap((source) => fields.map((field) => Number(source?.[field] || 0))));
+}
+
+function packageEntities() {
+  const combined = dedupeEntities([...state.rawProjects, ...state.packageSearchResults.flatMap((project) => entitySources(project))]);
+  return combined.filter((project) => packageSources(project).length);
+}
+
+function sortPackageProjects(projects) {
+  const sort = els.packageSort?.value || 'downloads';
+  const sorters = {
+    downloads: (a, b) => packageAggregate(b, ['downloads', 'recentDownloads']) - packageAggregate(a, ['downloads', 'recentDownloads']),
+    dependents: (a, b) => packageAggregate(b, ['dependentPackages', 'dependentRepositories']) - packageAggregate(a, ['dependentPackages', 'dependentRepositories']),
+    fresh: (a, b) => Date.parse(b.updatedAt || 0) - Date.parse(a.updatedAt || 0),
+    score: (a, b) => potentialScore(b) - potentialScore(a),
+  };
+  return [...projects].sort(sorters[sort] || sorters.downloads);
+}
+
+function renderPackageRadar() {
+  if (!els.packageGrid) return;
+  const selected = els.packageEcosystem?.value || 'all';
+  let projects = state.packageSearchResults.length ? [...state.packageSearchResults] : packageEntities();
+  if (selected !== 'all') projects = projects.filter((project) => packageSources(project).some((source) => source.platform === selected));
+  projects = sortPackageProjects(projects);
+  const downloads = projects.reduce((sum, project) => sum + packageAggregate(project, ['downloads', 'recentDownloads']), 0);
+  const dependents = projects.reduce((sum, project) => sum + packageAggregate(project, ['dependentPackages', 'dependentRepositories']), 0);
+  els.packageEntityCount.textContent = formatNumber(projects.length);
+  els.packageDownloadCount.textContent = formatNumber(downloads);
+  els.packageDependentCount.textContent = formatNumber(dependents);
+  els.packageComparedCount.textContent = state.compareItems.length;
+  els.packageTitle.textContent = state.packageSearchResults.length ? '软件包搜索结果' : '软件包生态雷达';
+  els.packageDesc.textContent = state.packageSearchResults.length
+    ? '搜索结果会与已发现的代码仓库保守合并；下载量与下游采用来自公开数据，不等于安全或适合直接接入。'
+    : '默认展示当前雷达收录的 npm、PyPI 与 crates.io 组件；真实增长将由本地历史快照逐步积累。';
+  els.packageStatus.textContent = `${projects.length} 个软件包实体`;
+  els.packageGrid.innerHTML = projects.length
+    ? projects.map((project) => projectCard(project, false, true)).join('')
+    : '<div class="empty"><h3>暂无软件包结果</h3><p>请确认使用 node server.mjs 启动，然后输入英文技术关键词搜索。</p></div>';
+  bindProjectActions(els.packageGrid);
+  renderSourceHealth(els.packageSources, state.packageSourceStatus);
+}
+
+async function searchPackages(query) {
+  const safeQuery = String(query || '').trim();
+  if (!safeQuery) return toast('请输入软件包用途或技术关键词');
+  if (!state.packageServiceAvailable) return toast('软件包搜索需要使用 node server.mjs 启动');
+  const ecosystems = (els.packageEcosystem?.value || 'all') === 'all' ? ['npm', 'pypi', 'crates'] : [els.packageEcosystem.value];
+  state.packageSourceStatus = Object.fromEntries(ecosystems.map((id) => [id, sourceStatusEntry('loading')]));
+  state.packageSearchResults = [];
+  renderPackageRadar();
+  const responses = await Promise.allSettled(ecosystems.map((id) => searchPlatform(id, safeQuery, 18)));
+  const raw = [];
+  responses.forEach((response, index) => {
+    const id = ecosystems[index];
+    if (response.status === 'fulfilled') {
+      raw.push(...response.value);
+      state.packageSourceStatus[id] = sourceStatusEntry(response.value.length ? 'live' : 'empty', response.value.length);
+    } else {
+      state.packageSourceStatus[id] = sourceStatusEntry('error', 0, readableError(response.reason));
+    }
+  });
+  const rawIds = new Set(raw.map((project) => project.id));
+  state.packageSearchResults = dedupeEntities([...state.rawProjects, ...raw]).filter((entity) => entitySources(entity).some((source) => rawIds.has(source.id)));
+  els.packageStatus.textContent = `“${safeQuery}” 找到 ${state.packageSearchResults.length} 个实体`;
+  renderPackageRadar();
+  void loadCachedInsights(state.packageSearchResults);
+  void loadHistoryGrowth(state.packageSearchResults, true);
+}
+
+function compareCell(value, extraClass = '') {
+  return `<td class="${extraClass}">${value}</td>`;
+}
+
+function renderCompare() {
+  if (!els.compareSelection) return;
+  const items = liveCompareItems();
+  state.compareItems = items;
+  const report = compareProjects(items, state.trustReports);
+  els.compareCount.textContent = items.length;
+  els.packageComparedCount.textContent = items.length;
+  els.compareSelection.innerHTML = items.map((project) => `<article class="compare-chip"><div><b>${escapeHtml(project.name)}</b><span>${escapeHtml(project.owner || '')} · ${escapeHtml(entitySources(project).map((source) => platformMeta(source).shortLabel).join(' + '))}</span></div><div><button data-detail="${escapeHtml(projectKey(project))}">详情</button><button data-remove-compare="${escapeHtml(projectKey(project))}">×</button></div></article>`).join('');
+  els.compareEmpty.hidden = items.length >= 2;
+  els.compareRecommendation.innerHTML = items.length >= 2
+    ? `<article class="compare-recommendation"><em>OPENRADAR DECISION</em><h2>${escapeHtml(report.winner?.facts?.name || '')} 当前综合更优</h2><p>${escapeHtml(report.recommendation)}</p><small>综合分是规则判断，不是安全认证、性能基准或法律意见。未运行可信度审计的项目按中性分处理。</small></article>`
+    : '';
+  if (items.length < 2) {
+    els.compareTableWrap.innerHTML = '';
+  } else {
+    const rows = report.rows;
+    const headers = rows.map((row) => `<th><button data-detail="${escapeHtml(projectKey(row.project))}">${escapeHtml(row.facts.name)}</button><span>${row.score}分</span></th>`).join('');
+    const row = (label, render) => `<tr><th>${label}</th>${rows.map((item) => compareCell(render(item))).join('')}</tr>`;
+    els.compareTableWrap.innerHTML = `<table class="compare-table"><thead><tr><th>对比维度</th>${headers}</tr></thead><tbody>
+      ${row('一句大白话', ({ project }) => escapeHtml(projectInsight(project)?.summary || rulePlainSummary(project)))}
+      ${row('平台来源', ({ facts }) => escapeHtml(facts.platforms.map((id) => platformCatalog[id]?.shortLabel || id).join(' + ')))}
+      ${row('软件包版本', ({ facts }) => escapeHtml(facts.version || '—'))}
+      ${row('Stars', ({ facts }) => formatNumber(facts.stars))}
+      ${row('下载量', ({ facts }) => formatNumber(facts.downloads))}
+      ${row('下游采用', ({ facts }) => formatNumber(facts.dependents))}
+      ${row('许可证', ({ facts }) => `<span class="badge ${commercialFriendly(facts.license) ? 'good' : 'warn'}">${escapeHtml(facts.license)}</span>`)}
+      ${row('最近更新', ({ facts }) => escapeHtml(timeAgo(facts.updatedAt)))}
+      ${row('可信度', ({ facts }) => `${Math.round(facts.scores.trust)} / 100`)}
+      ${row('真实采用', ({ facts }) => `${Math.round(facts.scores.adoption)} / 100`)}
+      ${row('维护活跃', ({ facts }) => `${Math.round(facts.scores.maintenance)} / 100`)}
+      ${row('接入简易度', ({ facts }) => `${Math.round(facts.scores.simplicity)} / 100`)}
+      ${row('对你的适配', ({ facts }) => `${Math.round(facts.scores.fit)} / 100`)}
+    </tbody></table>`;
+  }
+  els.compareSelection.querySelectorAll('[data-remove-compare]').forEach((button) => {
+    button.onclick = () => {
+      const project = findProject(button.dataset.removeCompare);
+      if (project) toggleCompare(project);
+    };
+  });
+  [...els.compareSelection.querySelectorAll('[data-detail]'), ...els.compareTableWrap.querySelectorAll('[data-detail]')].forEach((button) => {
+    button.onclick = () => openProjectDetail(button.dataset.detail);
+  });
+}
+
+async function auditCompareItems() {
+  if (state.compareAuditing) return;
+  if (!state.trustServiceAvailable) return toast('请使用 node server.mjs 启用可信度服务');
+  const items = liveCompareItems();
+  state.compareAuditing = true;
+  els.auditCompare.disabled = true;
+  els.auditCompare.textContent = '逐项审计中…';
+  try {
+    for (const project of items) {
+      if (trustForProject(project)) continue;
+      try {
+        const report = await fetchJsonSafe('/api/trust/analyze', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project, force: false }),
+        });
+        state.trustReports[report.projectId || projectKey(project)] = report;
+      } catch {
+        // A package or repository may have no public mapping; continue the remaining items.
+      }
+    }
+    renderCompare();
+    toast('对比项目可信度审计已完成或按公开覆盖降级');
+  } finally {
+    state.compareAuditing = false;
+    els.auditCompare.disabled = false;
+    els.auditCompare.textContent = '审计缺失项目';
+  }
 }
 
 function renderCategories() {
@@ -1208,10 +1446,14 @@ function renderFavorites() {
 function updateCounters() {
   els.favoriteCount.textContent = state.favorites.length;
   els.savedMetric.textContent = state.favorites.length;
+  if (els.compareCount) els.compareCount.textContent = state.compareItems.length;
+  if (els.packageComparedCount) els.packageComparedCount.textContent = state.compareItems.length;
   renderFavorites();
   renderRadar();
   if (state.results.length) renderResults();
   if (state.activeDetailId) renderDetail();
+  if (document.getElementById('packagesView')?.classList.contains('active')) renderPackageRadar();
+  if (document.getElementById('compareView')?.classList.contains('active')) renderCompare();
 }
 
 function navigate(view) {
@@ -1222,6 +1464,8 @@ function navigate(view) {
   document.querySelector(`[data-view="${view}"]`)?.classList.add('active');
   els.sidebar.classList.remove('open');
   if (view === 'favorites') renderFavorites();
+  if (view === 'packages') renderPackageRadar();
+  if (view === 'compare') renderCompare();
   if (view === 'detail') renderDetail();
 }
 
@@ -1343,6 +1587,8 @@ async function loadCachedInsights(projects) {
     renderFavorites();
     if (state.results.length) renderResults();
     if (state.activeDetailId) renderDetail();
+  if (document.getElementById('packagesView')?.classList.contains('active')) renderPackageRadar();
+  if (document.getElementById('compareView')?.classList.contains('active')) renderCompare();
   } catch {
     // Cached insight loading is optional and must not block radar use.
   }
@@ -1409,6 +1655,8 @@ async function generateProjectInsight(project, force = false) {
     renderFavorites();
     if (state.results.length) renderResults();
     if (state.activeDetailId) renderDetail();
+  if (document.getElementById('packagesView')?.classList.contains('active')) renderPackageRadar();
+  if (document.getElementById('compareView')?.classList.contains('active')) renderCompare();
     await loadInsightStatus(false);
     toast(insight.source === 'ollama' ? (insight.cached ? '已读取本地AI缓存' : '中文解读已生成并缓存') : '本地AI未就绪，已显示规则摘要');
   } catch (error) {
@@ -1464,6 +1712,7 @@ async function radar(force = false) {
       state.rawProjects = dedupeProjects([...cached.projects.flatMap((project) => entitySources(project)), ...seed.map(normalizeProject)]);
       state.projects = dedupeEntities(state.rawProjects);
       state.sourceStatus = cached.sourceStatus || {};
+      state.packageSourceStatus = Object.fromEntries(['npm','pypi','crates'].map((id) => [id, state.sourceStatus[id] || sourceStatusEntry('empty')]));
       els.status.textContent = '本地缓存 · 点击刷新可重新扫描';
       els.status.className = 'live';
       renderSourceHealth(els.sourceHealth, state.sourceStatus);
@@ -1517,7 +1766,9 @@ async function radar(force = false) {
     : '公开接口暂不可用，显示种子数据';
   els.status.className = liveProjects.length ? (failedCount ? 'warn' : 'live') : 'warn';
   renderSourceHealth(els.sourceHealth, state.sourceStatus);
+  state.packageSourceStatus = Object.fromEntries(['npm','pypi','crates'].map((id) => [id, state.sourceStatus[id] || sourceStatusEntry('empty')]));
   renderRadar();
+  if (document.getElementById('packagesView')?.classList.contains('active')) renderPackageRadar();
   void loadHistoryGrowth(liveProjects.length ? liveProjects : state.projects, Boolean(liveProjects.length));
   void loadCachedInsights([...state.projects, ...state.favorites]);
   openHashProject();
@@ -1679,9 +1930,10 @@ async function detectRuntimeMode() {
     state.identityServiceAvailable = Boolean(health.identityCorrections);
     state.trustServiceAvailable = Boolean(health.trust);
     state.backupAvailable = Boolean(health.backup);
+    state.packageServiceAvailable = Boolean(health.packages);
     els.runtimeMode.textContent = '● 本地兼容服务';
     els.runtimeMode.className = 'runtime-live';
-    els.runtimeDetail.textContent = health.insights ? `五平台实时 · 历史、本地AI、可信度、完整备份与${health.codexExport ? 'Codex研究包' : '浏览器研究提示词'}` : '五平台实时 · 跨平台纠错 · 本地历史与完整备份';
+    els.runtimeDetail.textContent = health.insights ? `代码、模型与软件包生态 · 历史、本地AI、可信度、完整备份与${health.codexExport ? 'Codex研究包' : '浏览器研究提示词'}` : '代码、模型与软件包生态 · 跨平台纠错 · 本地历史与完整备份';
     renderServiceStatuses();
     if (state.identityServiceAvailable) await loadIdentityOverridesFromServer();
   } catch {
@@ -1689,10 +1941,11 @@ async function detectRuntimeMode() {
     state.identityServiceAvailable = false;
     state.trustServiceAvailable = false;
     state.backupAvailable = false;
+    state.packageServiceAvailable = false;
     renderServiceStatuses();
     els.runtimeMode.textContent = '● 静态模式';
     els.runtimeMode.className = 'runtime-warn';
-    els.runtimeDetail.textContent = '五平台可用 · Gitee请改用 node server.mjs';
+    els.runtimeDetail.textContent = '静态数据可浏览 · 软件包、历史、Gitee与本地AI请改用 node server.mjs';
   }
 }
 
@@ -1812,6 +2065,27 @@ function init() {
   els.regenerateInsight.onclick = () => {
     const project = findProject(state.activeInsightId);
     if (project) void generateProjectInsight(project, true);
+  };
+
+  if (els.packageSearchForm) {
+    els.packageSearchForm.onsubmit = (event) => {
+      event.preventDefault();
+      void searchPackages(els.packageQuery.value);
+    };
+  }
+  if (els.packageEcosystem) els.packageEcosystem.onchange = () => {
+    if (state.packageSearchResults.length && els.packageQuery.value.trim()) void searchPackages(els.packageQuery.value);
+    else renderPackageRadar();
+  };
+  if (els.packageSort) els.packageSort.onchange = renderPackageRadar;
+  if (els.auditCompare) els.auditCompare.onclick = () => void auditCompareItems();
+  if (els.clearCompare) els.clearCompare.onclick = () => {
+    if (!state.compareItems.length || confirm('确定清空当前项目对比吗？')) {
+      state.compareItems = [];
+      persistCompareItems();
+      renderCompare();
+      toast('项目对比已清空');
+    }
   };
 
   if (els.collectHistory) {

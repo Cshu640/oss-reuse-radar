@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07101d">
-  <meta name="description" content="跨平台开源项目发现、可信度审计、人工去重纠错、完整备份、中文解读与Codex研究雷达">
+  <meta name="description" content="跨平台开源项目发现、可信度审计、软件包生态、多项目对比、完整备份、中文解读与Codex研究雷达">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
@@ -18,11 +18,13 @@
         <button class="nav active" data-view="radar">◉ 今日雷达</button>
         <button class="nav" data-view="search">⌕ 灵感搜索</button>
         <button class="nav" data-view="favorites">★ 我的收藏 <i id="favoriteCount">0</i></button>
+        <button class="nav" data-view="packages">▣ 软件包生态</button>
+        <button class="nav" data-view="compare">▦ 项目对比 <i id="compareCount">0</i></button>
         <button class="nav" data-view="watch">◌ 观察名单</button>
       </nav>
       <p class="side-title">兴趣分类</p>
       <div id="categories"></div>
-      <footer><span id="runtimeMode">● 检测运行模式</span><small id="runtimeDetail">GitHub · Hugging Face · GitLab · Codeberg · Gitee · ModelScope</small></footer>
+      <footer><span id="runtimeMode">● 检测运行模式</span><small id="runtimeDetail">GitHub · Hugging Face · GitLab · Codeberg · Gitee · ModelScope · npm · PyPI · crates.io</small></footer>
     </aside>
 
     <main>
@@ -41,7 +43,7 @@
         <div class="toolbar">
           <div class="tabs"><button class="tab active" data-period="today">24小时增长</button><button class="tab" data-period="week">7天增长</button><button class="tab" data-period="month">30天增长</button><button class="tab" data-period="rising">低 Star 高潜力</button></div>
           <div class="filters">
-            <select id="platform"><option value="all">全部平台</option><option value="github">GitHub</option><option value="huggingface">Hugging Face</option><option value="gitlab">GitLab</option><option value="codeberg">Codeberg</option><option value="gitee">Gitee</option><option value="modelscope">ModelScope</option></select>
+            <select id="platform"><option value="all">全部平台</option><option value="github">GitHub</option><option value="huggingface">Hugging Face</option><option value="gitlab">GitLab</option><option value="codeberg">Codeberg</option><option value="gitee">Gitee</option><option value="modelscope">ModelScope</option><option value="npm">npm</option><option value="pypi">PyPI</option><option value="crates">crates.io</option></select>
             <select id="license"><option value="all">全部许可证</option><option value="commercial">优先可商用</option><option value="unknown">待核查</option></select>
             <select id="useType"><option value="all">全部用途</option><option value="direct">直接安装使用</option><option value="selfhost">适合个人部署</option><option value="codex">Codex二次开发</option><option value="component">技术组件</option><option value="reference">模仿产品设计</option><option value="business">商业化机会</option></select>
           </div>
@@ -52,10 +54,10 @@
       </section>
 
       <section id="searchView" class="view">
-        <div class="page-title"><em>INSPIRATION SEARCH</em><h1>有灵感，马上跨平台搜索</h1><p>输入中文自然语言需求，自动扩展为英文技术关键词，再并行搜索五个实时平台；Gitee受限时提供外部搜索入口。</p></div>
+        <div class="page-title"><em>INSPIRATION SEARCH</em><h1>有灵感，马上跨平台搜索</h1><p>输入中文自然语言需求，自动扩展为英文技术关键词，再并行搜索代码、模型与软件包生态；Gitee受限时提供外部搜索入口。</p></div>
         <form id="searchForm" class="search-box">
           <textarea id="query" placeholder="例如：寻找适合网页游戏、允许商用、TypeScript可接入的NPC长期记忆系统"></textarea>
-          <div class="search-controls"><div class="source-select"><label><input type="checkbox" data-search-platform="github" checked> GitHub</label><label><input type="checkbox" data-search-platform="huggingface" checked> Hugging Face</label><label><input type="checkbox" data-search-platform="gitlab" checked> GitLab</label><label><input type="checkbox" data-search-platform="codeberg" checked> Codeberg</label><label title="公开搜索接口可能不稳定"><input type="checkbox" data-search-platform="gitee" checked> Gitee <small>受限</small></label><label><input type="checkbox" data-search-platform="modelscope" checked> ModelScope</label></div><select id="sort"><option value="score">综合潜力</option><option value="popular">Star / Like</option><option value="fresh">最近更新</option></select><button class="primary">开始搜索</button></div>
+          <div class="search-controls"><div class="source-select"><label><input type="checkbox" data-search-platform="github" checked> GitHub</label><label><input type="checkbox" data-search-platform="huggingface" checked> Hugging Face</label><label><input type="checkbox" data-search-platform="gitlab" checked> GitLab</label><label><input type="checkbox" data-search-platform="codeberg" checked> Codeberg</label><label title="公开搜索接口可能不稳定"><input type="checkbox" data-search-platform="gitee" checked> Gitee <small>受限</small></label><label><input type="checkbox" data-search-platform="modelscope" checked> ModelScope</label><label><input type="checkbox" data-search-platform="npm" checked> npm</label><label><input type="checkbox" data-search-platform="pypi" checked> PyPI</label><label><input type="checkbox" data-search-platform="crates" checked> crates.io</label></div><select id="sort"><option value="score">综合潜力</option><option value="popular">Star / Like</option><option value="fresh">最近更新</option></select><button class="primary">开始搜索</button></div>
         </form>
         <div id="suggestions" class="chips"></div>
         <p id="searchSummary"></p>
@@ -69,6 +71,28 @@
         <div class="favorite-tools"><input id="favoriteSearch" placeholder="搜索项目、分类、用途、标签或备注"><select id="tagFilter"><option value="all">全部标签</option></select></div>
         <div id="favoriteEmpty" class="empty" hidden><b>☆</b><h3>还没有收藏</h3><p>点击项目卡片右上角星标即可收藏。</p></div>
         <div id="favoriteGrid" class="grid"></div>
+      </section>
+
+      <section id="packagesView" class="view">
+        <div class="page-title"><em>PACKAGE ECOSYSTEM INTELLIGENCE</em><h1>真实采用，比 Star 更重要</h1><p>发现 npm、PyPI 与 crates.io 开发组件，查看下载量、下游采用、版本、许可证、维护状态，并可直接加入项目对比。</p></div>
+        <form id="packageSearchForm" class="package-search-box">
+          <div class="quick"><span>⌕</span><input id="packageQuery" placeholder="例如：NPC memory、PDF OCR、workflow automation、procedural generation"></div>
+          <select id="packageEcosystem"><option value="all">全部软件包生态</option><option value="npm">npm</option><option value="pypi">PyPI</option><option value="crates">crates.io</option></select>
+          <select id="packageSort"><option value="downloads">下载量优先</option><option value="dependents">下游采用优先</option><option value="fresh">最近更新</option><option value="score">综合潜力</option></select>
+          <button class="primary">搜索组件</button>
+        </form>
+        <div class="package-metrics"><div><b id="packageEntityCount">—</b><span>软件包实体</span></div><div><b id="packageDownloadCount">—</b><span>可见下载量</span></div><div><b id="packageDependentCount">—</b><span>下游采用</span></div><div><b id="packageComparedCount">0</b><span>已加入对比</span></div></div>
+        <div class="section-title"><div><h2 id="packageTitle">软件包生态雷达</h2><p id="packageDesc">默认展示当前雷达收录的软件包；搜索时直接查询免费公开接口。</p></div><span id="packageStatus">准备加载</span></div>
+        <div id="packageSources" class="source-health"></div>
+        <div id="packageGrid" class="grid"></div>
+      </section>
+
+      <section id="compareView" class="view">
+        <div class="page-title split"><div><em>DECISION WORKBENCH</em><h1>多项目一键对比</h1><p>选择2至5个候选，比较许可证、维护、真实采用、可信度、接入简易度和对你的适配度。</p></div><div class="compare-actions"><button id="auditCompare">审计缺失项目</button><button id="clearCompare" class="danger">清空对比</button></div></div>
+        <div id="compareSelection" class="compare-selection"></div>
+        <div id="compareEmpty" class="empty"><b>▦</b><h3>请选择2至5个项目</h3><p>在任意项目卡点击“加入对比”，可混合比较代码仓库、模型与软件包。</p></div>
+        <div id="compareRecommendation"></div>
+        <div id="compareTableWrap" class="compare-table-wrap"></div>
       </section>
 
       <section id="detailView" class="view">
@@ -87,7 +111,7 @@
         <article class="roadmap insight-panel"><div class="split"><div><h3>免费中文大白话</h3><p id="insightMode">检测本地Ollama</p></div><button id="refreshInsights">重新检测</button></div><p id="insightNote">未检测。</p><div class="insight-mini-metrics"><span><b id="insightCount">—</b> 已缓存解读</span><span><b id="insightModel">qwen3:4b</b> 当前模型</span></div><ul><li>所有项目先显示不耗算力的规则摘要</li><li>点击“中文解读”后才调用本地模型，每次只处理一个项目</li><li>生成后保存在 <code>data/insights.json</code>，项目未更新时直接复用</li><li>模型请求结束后立即卸载，避免持续占用显存</li></ul></article>
         <article class="roadmap trust-overview"><div class="split"><div><h3>免费可信度与供应链初筛</h3><p id="trustMode">检测OpenSSF、deps.dev与OSV本地代理</p></div><span class="provenance rule">规则判断</span></div><p id="trustNote">项目详情页中按需运行，不自动批量请求。自动结果不是安全认证。</p><ul><li>OpenSSF Scorecard：公开安全实践信号</li><li>deps.dev：仓库、软件包、许可证和依赖映射</li><li>OSV：已映射软件包版本的已知漏洞查询</li><li>事实数据、规则判断、本地AI和人工确认分别标识</li></ul></article>
         <article class="roadmap backup-panel"><div class="split"><div><h3>完整备份与版本迁移</h3><p id="backupMode">检测本地完整备份服务</p></div><div class="backup-actions"><button id="watchExportBackup" class="primary">导出全部</button><button id="watchImportBackup">导入备份</button></div></div><p id="backupNote">完整备份包含收藏、人工纠错、历史、AI解读、可信度报告和Codex研究包。</p><ul><li>导入会替换新版目录中的本地数据，执行前必须确认</li><li>导入完成后需要重启OpenRadar</li><li>建议每次升级前先导出一份完整备份</li></ul></article>
-        <article class="roadmap"><h3>当前与后续路线</h3><ul><li>已完成保守去重、人工合并/拆分/主来源纠错</li><li>已完成免费可信度初筛与完整数据迁移</li><li>下一步：软件包生态雷达与项目对比器</li><li>收藏项目优先追踪与爆发提醒</li><li>Codex MCP仓库级接入与云端无人值守采集</li></ul></article>
+        <article class="roadmap"><h3>当前与后续路线</h3><ul><li>已完成保守去重、人工合并/拆分/主来源纠错</li><li>已完成免费可信度初筛与完整数据迁移</li><li>已完成 npm、PyPI、crates.io 软件包雷达与2至5项对比器</li><li>收藏项目优先追踪与爆发提醒</li><li>Codex MCP仓库级接入与云端无人值守采集</li></ul></article>
       </section>
     </main>
   </div>

@@ -68,6 +68,42 @@ export const platformCatalog = {
     searchLimit: 12,
     fallbackUrl: (query) => `https://modelscope.cn/models?name=${encodeURIComponent(query)}`,
   },
+  npm: {
+    label: 'npm',
+    shortLabel: 'npm',
+    primaryField: 'downloads',
+    primaryLabel: '月下载',
+    secondaryField: 'dependentRepositories',
+    secondaryLabel: '下游仓库',
+    searchQueries: 2,
+    searchLimit: 12,
+    packagePlatform: true,
+    fallbackUrl: (query) => `https://www.npmjs.com/search?q=${encodeURIComponent(query)}`,
+  },
+  pypi: {
+    label: 'PyPI',
+    shortLabel: 'PyPI',
+    primaryField: 'downloads',
+    primaryLabel: '月下载',
+    secondaryField: 'dependentRepositories',
+    secondaryLabel: '下游仓库',
+    searchQueries: 2,
+    searchLimit: 12,
+    packagePlatform: true,
+    fallbackUrl: (query) => `https://pypi.org/search/?q=${encodeURIComponent(query)}`,
+  },
+  crates: {
+    label: 'crates.io',
+    shortLabel: 'crates',
+    primaryField: 'downloads',
+    primaryLabel: '累计下载',
+    secondaryField: 'recentDownloads',
+    secondaryLabel: '近期下载',
+    searchQueries: 2,
+    searchLimit: 12,
+    packagePlatform: true,
+    fallbackUrl: (query) => `https://crates.io/search?q=${encodeURIComponent(query)}`,
+  },
 };
 
 export const platformIds = Object.keys(platformCatalog);
@@ -314,6 +350,11 @@ async function searchModelScope(query, limit) {
   return mapProjects(data?.data?.models || data?.models || data?.data, fromModelScope);
 }
 
+async function searchPackageEcosystem(ecosystem, query, limit) {
+  const data = await fetchJson(`/api/packages/search?ecosystem=${encodeURIComponent(ecosystem)}&q=${encodeURIComponent(query)}&limit=${limit}`, { headers: { Accept: 'application/json' } });
+  return mapProjects(data?.projects, (project) => ({ ...project, platform: ecosystem }));
+}
+
 const searchers = {
   github: searchGitHub,
   huggingface: searchHuggingFace,
@@ -321,6 +362,9 @@ const searchers = {
   codeberg: searchCodeberg,
   gitee: searchGitee,
   modelscope: searchModelScope,
+  npm: (query, limit) => searchPackageEcosystem('npm', query, limit),
+  pypi: (query, limit) => searchPackageEcosystem('pypi', query, limit),
+  crates: (query, limit) => searchPackageEcosystem('crates', query, limit),
 };
 
 export async function searchPlatform(platformId, query, limit) {
@@ -367,6 +411,11 @@ export async function radarPlatform(platformId) {
   if (platformId === 'modelscope') {
     const data = await fetchJson('https://modelscope.cn/openapi/v1/models?sort=downloads&page_size=18', { headers: { Accept: 'application/json' } });
     return mapProjects(data?.data?.models || data?.models || data?.data, fromModelScope);
+  }
+
+  if (['npm', 'pypi', 'crates'].includes(platformId)) {
+    const data = await fetchJson(`/api/packages/radar?ecosystem=${encodeURIComponent(platformId)}&limit=18`, { headers: { Accept: 'application/json' } });
+    return mapProjects(data?.projects, (project) => ({ ...project, platform: platformId }));
   }
 
   throw new Error(`未知平台：${platformId}`);

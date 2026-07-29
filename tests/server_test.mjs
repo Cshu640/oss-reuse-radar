@@ -116,6 +116,11 @@ const trustService = {
   analyze: async (project, options) => ({ projectId: project.entityId || project.id, assessment: { level: 'medium', score: 62 }, facts: { osv: { vulnerabilityCount: 0 } }, force: Boolean(options.force) }),
 };
 const backupService = createBackupService({ rootDir: historyRoot, now: () => Date.parse('2026-07-29T03:04:05Z') });
+const packageService = {
+  status: () => ({ enabled: true, ecosystems: ['npm', 'pypi', 'crates'], cacheEntries: 0 }),
+  search: async (ecosystem, query, limit) => ({ ecosystem, query, limit: Number(limit), projects: [{ id: `${ecosystem}:demo-tool`, platform: ecosystem, packageSystem: ecosystem, packageName: 'demo-tool', name: 'demo-tool', owner: 'demo', url: `https://example.test/${ecosystem}/demo-tool`, license: 'MIT', downloads: 1234 }] }),
+  radar: async (ecosystem, limit) => ({ ecosystem, limit: Number(limit), projects: [{ id: `${ecosystem}:radar-tool`, platform: ecosystem, packageSystem: ecosystem, packageName: 'radar-tool', name: 'radar-tool', owner: 'demo', url: `https://example.test/${ecosystem}/radar-tool`, license: 'MIT', downloads: 5678 }] }),
+};
 
 const server = createOpenRadarServer({
   historyStore,
@@ -125,6 +130,7 @@ const server = createOpenRadarServer({
   identityStore,
   trustService,
   backupService,
+  packageService,
   giteeSearch: async (query, limit) => ({
     projects: [{ full_name: 'mock/project', name: 'project', owner: { login: 'mock' }, html_url: 'https://gitee.com/mock/project' }],
     source: 'mock',
@@ -141,10 +147,11 @@ assert.equal(health.giteeProxy, true);
 assert.equal(health.history, true);
 assert.equal(health.insights, true);
 assert.equal(health.codexExport, true);
-assert.equal(health.version, '0.4-A');
+assert.equal(health.version, '0.4-B');
 assert.equal(health.identityCorrections, true);
 assert.equal(health.trust, true);
 assert.equal(health.backup, true);
+assert.equal(health.packages, true);
 
 
 const originalIdentity = await fetch(`${base}/api/identity/overrides`).then((response) => response.json());
@@ -201,6 +208,13 @@ assert.equal(codexExport.files.length, 2);
 assert.match(codexExport.task, /只研究，不集成/);
 assert.match(codexExport.folder, /^exports\/codex\//);
 
+const packageStatus = await fetch(`${base}/api/packages/status`).then((response) => response.json());
+assert.deepEqual(packageStatus.ecosystems, ['npm', 'pypi', 'crates']);
+const packageSearch = await fetch(`${base}/api/packages/search?ecosystem=npm&q=npc%20memory&limit=5`).then((response) => response.json());
+assert.equal(packageSearch.projects[0].downloads, 1234);
+const packageRadar = await fetch(`${base}/api/packages/radar?ecosystem=crates&limit=6`).then((response) => response.json());
+assert.equal(packageRadar.projects[0].platform, 'crates');
+
 const proxied = await fetch(`${base}/api/gitee/search?q=AI&limit=3`).then((response) => response.json());
 assert.equal(proxied.projects.length, 1);
 assert.equal(proxied.query, 'AI');
@@ -239,4 +253,4 @@ server.close();
 await once(server, 'close');
 await rm(historyRoot, { recursive: true, force: true });
 
-console.log(JSON.stringify({ parsed: parsed.length, fallbackSource: fallback.source, exploreSource: explore.source, stopLossSource: stopLoss.source, health, codexFolder: codexExport.folder, proxied: proxied.projects.length, historyProjects: historyStatus.projectCount, insightModel: insightStatus.model }, null, 2));
+console.log(JSON.stringify({ parsed: parsed.length, fallbackSource: fallback.source, exploreSource: explore.source, stopLossSource: stopLoss.source, health, codexFolder: codexExport.folder, proxied: proxied.projects.length, historyProjects: historyStatus.projectCount, insightModel: insightStatus.model, packageEcosystems: packageStatus.ecosystems }, null, 2));

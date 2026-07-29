@@ -10,6 +10,7 @@ import { IdentityStore } from './identity-store.mjs';
 import { TrustStore } from './trust-store.mjs';
 import { createTrustService } from './trust-service.mjs';
 import { createBackupService } from './backup-service.mjs';
+import { createPackageService } from './package-service.mjs';
 import { platformIds, radarPlatform } from './platform-adapters.js';
 
 const ROOT_DIR = fileURLToPath(new URL('.', import.meta.url));
@@ -17,6 +18,7 @@ const DEFAULT_PORT = Number(process.env.PORT || 8080);
 const REQUEST_TIMEOUT = 12_000;
 const CACHE_TTL = 15 * 60 * 1000;
 const HISTORY_INTERVAL = 6 * 60 * 60 * 1000;
+const PACKAGE_PLATFORMS = new Set(['npm', 'pypi', 'crates']);
 const HISTORY_PLATFORMS = platformIds.filter((platformId) => platformId !== 'gitee');
 
 const MIME_TYPES = {
@@ -309,6 +311,7 @@ async function readJsonBody(req, maxBytes = 2_000_000) {
 export function createHistoryCollector({
   historyStore,
   radarPlatformImpl = radarPlatform,
+  packageService = null,
   platforms = HISTORY_PLATFORMS,
   now = () => Date.now(),
 } = {}) {
@@ -336,7 +339,13 @@ export function createHistoryCollector({
       state.error = '';
       state.platformResults = Object.fromEntries(platforms.map((platformId) => [platformId, { state: 'loading', count: 0 }]));
       try {
-        const responses = await Promise.allSettled(platforms.map((platformId) => radarPlatformImpl(platformId)));
+        const responses = await Promise.allSettled(platforms.map(async (platformId) => {
+          if (PACKAGE_PLATFORMS.has(platformId) && packageService) {
+            const result = await packageService.radar(platformId, 18);
+            return result.projects || [];
+          }
+          return radarPlatformImpl(platformId);
+        }));
         const projects = [];
         responses.forEach((response, index) => {
           const platformId = platforms[index];
@@ -402,12 +411,12 @@ async function serveStatic(req, res, rootDir) {
   }
 }
 
-export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = createGiteeSearchService(), historyStore = null, historyCollector = null, insightService = null, codexExportService = null, identityStore = null, trustService = null, backupService = null } = {}) {
+export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = createGiteeSearchService(), historyStore = null, historyCollector = null, insightService = null, codexExportService = null, identityStore = null, trustService = null, backupService = null, packageService = null } = {}) {
   return createServer(async (req, res) => {
     try {
       const requestUrl = new URL(req.url || '/', 'http://localhost');
       if (req.method === 'GET' && requestUrl.pathname === '/api/health') {
-        json(res, 200, { status: 'ok', version: '0.4-A', giteeProxy: true, giteeMode: 'bounded-fallback', history: Boolean(historyStore), historyCollector: historyCollector?.getState?.() || null, insights: Boolean(insightService), codexExport: Boolean(codexExportService), identityCorrections: Boolean(identityStore), trust: Boolean(trustService), backup: Boolean(backupService) });
+        json(res, 200, { status: 'ok', version: '0.4-B', giteeProxy: true, giteeMode: 'bounded-fallback', history: Boolean(historyStore), historyCollector: historyCollector?.getState?.() || null, insights: Boolean(insightService), codexExport: Boolean(codexExportService), identityCorrections: Boolean(identityStore), trust: Boolean(trustService), backup: Boolean(backupService), packages: Boolean(packageService), packageStatus: packageService?.status?.() || null });
         return;
       }
       if (req.method === 'GET' && requestUrl.pathname === '/api/history/status') {
@@ -590,6 +599,47 @@ export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = create
         }
         return;
       }
+      if (req.method === 'GET' && requestUrl.pathname === '/api/packages/status') {
+        if (!packageService) {
+          json(res, 503, { enabled: false, error: 'Package service is not configured' });
+          return;
+        }
+        json(res, 200, packageService.status());
+        return;
+      }
+      if (req.method === 'GET' && requestUrl.pathname === '/api/packages/search') {
+        if (!packageService) {
+          json(res, 503, { error: 'Package service is not configured' });
+          return;
+        }
+        const ecosystem = requestUrl.searchParams.get('ecosystem') || '';
+        const query = requestUrl.searchParams.get('q') || '';
+        const limit = requestUrl.searchParams.get('limit') || 20;
+        try {
+          const result = await packageService.search(ecosystem, query, limit);
+          console.log(`[Packages] search ecosystem=${JSON.stringify(ecosystem)} q=${JSON.stringify(query)} count=${result.projects?.length || 0} cached=${Boolean(result.cached)}`);
+          json(res, 200, result);
+        } catch (error) {
+          json(res, 502, { error: error?.message || 'Package search failed', ecosystem });
+        }
+        return;
+      }
+      if (req.method === 'GET' && requestUrl.pathname === '/api/packages/radar') {
+        if (!packageService) {
+          json(res, 503, { error: 'Package service is not configured' });
+          return;
+        }
+        const ecosystem = requestUrl.searchParams.get('ecosystem') || '';
+        const limit = requestUrl.searchParams.get('limit') || 18;
+        try {
+          const result = await packageService.radar(ecosystem, limit);
+          console.log(`[Packages] radar ecosystem=${JSON.stringify(ecosystem)} count=${result.projects?.length || 0} cached=${Boolean(result.cached)}`);
+          json(res, 200, result);
+        } catch (error) {
+          json(res, 502, { error: error?.message || 'Package radar failed', ecosystem });
+        }
+        return;
+      }
       if (req.method === 'GET' && requestUrl.pathname === '/api/gitee/search') {
         const query = requestUrl.searchParams.get('q') || '';
         const limit = requestUrl.searchParams.get('limit') || 20;
@@ -617,9 +667,10 @@ export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = create
 const entryPath = process.argv[1] ? resolve(process.argv[1]) : '';
 if (entryPath && pathToFileURL(entryPath).href === import.meta.url) {
   const startOpenRadar = async () => {
+    const packageService = createPackageService();
     const historyStore = new HistoryStore(resolve(ROOT_DIR, 'data/history.json'));
     await historyStore.init();
-    const historyCollector = createHistoryCollector({ historyStore });
+    const historyCollector = createHistoryCollector({ historyStore, packageService });
     const insightStore = new InsightStore(resolve(ROOT_DIR, 'data/insights.json'));
     await insightStore.init();
     const insightService = createInsightService({ store: insightStore });
@@ -630,7 +681,7 @@ if (entryPath && pathToFileURL(entryPath).href === import.meta.url) {
     await trustStore.init();
     const trustService = createTrustService({ store: trustStore });
     const backupService = createBackupService({ rootDir: ROOT_DIR });
-    const server = createOpenRadarServer({ historyStore, historyCollector, insightService, codexExportService, identityStore, trustService, backupService });
+    const server = createOpenRadarServer({ historyStore, historyCollector, insightService, codexExportService, identityStore, trustService, backupService, packageService });
     server.on('error', (error) => {
       console.error('');
       if (error?.code === 'EADDRINUSE') {
@@ -644,14 +695,16 @@ if (entryPath && pathToFileURL(entryPath).href === import.meta.url) {
     });
     server.listen(DEFAULT_PORT, '127.0.0.1', () => {
       console.log('');
-      console.log('  OpenRadar Phase 0.4-A');
+      console.log('  OpenRadar Phase 0.4-B');
       console.log(`  Local: http://localhost:${DEFAULT_PORT}`);
       console.log('  Gitee: 有止损兼容通道（v5 → 官方搜索 → 首页探索 → 外部搜索）');
-      console.log('  History: 本地快照已启用（启动即采集，之后每6小时采集五个平台）');
+      console.log('  History: 本地快照已启用（启动即采集，之后每6小时采集5个代码/模型平台与3个软件包生态）');
       console.log('  Insights: 本地Ollama中文解读已启用（默认模型 qwen3:4b，按需生成并缓存）');
       console.log('  Identity: 跨平台保守去重、人工合并/拆分与主来源纠错已启用');
       console.log('  Trust: OpenSSF Scorecard、deps.dev与OSV按需免费审计已启用');
       console.log('  Backup: 收藏、历史、解读、可信度与Codex研究包完整迁移已启用');
+      console.log('  Packages: npm、PyPI与crates.io零付费软件包雷达已启用');
+      console.log('  Compare: 2至5个项目的软件包采用度、维护、许可证与接入难度对比已启用');
       console.log('  Codex: 本地研究包导出已启用（不会自动启动Codex或消耗额度）');
       console.log('  按 Ctrl + C 停止服务器。');
       console.log('');

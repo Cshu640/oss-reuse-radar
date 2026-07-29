@@ -6,6 +6,10 @@ import { HistoryStore } from './history-store.mjs';
 import { InsightStore } from './insight-store.mjs';
 import { createInsightService } from './insight-service.mjs';
 import { createCodexExportService } from './codex-export-service.mjs';
+import { IdentityStore } from './identity-store.mjs';
+import { TrustStore } from './trust-store.mjs';
+import { createTrustService } from './trust-service.mjs';
+import { createBackupService } from './backup-service.mjs';
 import { platformIds, radarPlatform } from './platform-adapters.js';
 
 const ROOT_DIR = fileURLToPath(new URL('.', import.meta.url));
@@ -398,12 +402,12 @@ async function serveStatic(req, res, rootDir) {
   }
 }
 
-export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = createGiteeSearchService(), historyStore = null, historyCollector = null, insightService = null, codexExportService = null } = {}) {
+export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = createGiteeSearchService(), historyStore = null, historyCollector = null, insightService = null, codexExportService = null, identityStore = null, trustService = null, backupService = null } = {}) {
   return createServer(async (req, res) => {
     try {
       const requestUrl = new URL(req.url || '/', 'http://localhost');
       if (req.method === 'GET' && requestUrl.pathname === '/api/health') {
-        json(res, 200, { status: 'ok', version: '0.3-C', giteeProxy: true, giteeMode: 'bounded-fallback', history: Boolean(historyStore), historyCollector: historyCollector?.getState?.() || null, insights: Boolean(insightService), codexExport: Boolean(codexExportService) });
+        json(res, 200, { status: 'ok', version: '0.4-A', giteeProxy: true, giteeMode: 'bounded-fallback', history: Boolean(historyStore), historyCollector: historyCollector?.getState?.() || null, insights: Boolean(insightService), codexExport: Boolean(codexExportService), identityCorrections: Boolean(identityStore), trust: Boolean(trustService), backup: Boolean(backupService) });
         return;
       }
       if (req.method === 'GET' && requestUrl.pathname === '/api/history/status') {
@@ -476,6 +480,93 @@ export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = create
         }
         return;
       }
+      if (req.method === 'GET' && requestUrl.pathname === '/api/identity/overrides') {
+        if (!identityStore) {
+          json(res, 503, { enabled: false, error: 'Identity store is not configured' });
+          return;
+        }
+        json(res, 200, identityStore.get());
+        return;
+      }
+      if (req.method === 'POST' && requestUrl.pathname === '/api/identity/overrides') {
+        if (!identityStore) {
+          json(res, 503, { error: 'Identity store is not configured' });
+          return;
+        }
+        try {
+          const body = await readJsonBody(req, 2_000_000);
+          json(res, 200, await identityStore.replace(body));
+        } catch (error) {
+          json(res, 400, { error: error?.message || 'Identity override update failed' });
+        }
+        return;
+      }
+      if (req.method === 'GET' && requestUrl.pathname === '/api/trust/status') {
+        if (!trustService) {
+          json(res, 503, { enabled: false, error: 'Trust service is not configured' });
+          return;
+        }
+        json(res, 200, await trustService.status());
+        return;
+      }
+      if (req.method === 'GET' && requestUrl.pathname === '/api/trust') {
+        if (!trustService) {
+          json(res, 503, { error: 'Trust service is not configured' });
+          return;
+        }
+        const ids = (requestUrl.searchParams.get('ids') || '').split(',').map((value) => value.trim()).filter(Boolean).slice(0, 250);
+        json(res, 200, { reports: await trustService.getMany(ids) });
+        return;
+      }
+      if (req.method === 'POST' && requestUrl.pathname === '/api/trust/analyze') {
+        if (!trustService) {
+          json(res, 503, { error: 'Trust service is not configured' });
+          return;
+        }
+        try {
+          const body = await readJsonBody(req, 1_500_000);
+          const report = await trustService.analyze(body.project, { force: Boolean(body.force) });
+          console.log(`[Trust] project=${JSON.stringify(body.project?.entityId || body.project?.id || '')} level=${report.assessment?.level || 'unknown'} cached=${Boolean(report.cached)}`);
+          json(res, 200, report);
+        } catch (error) {
+          json(res, 502, { error: error?.message || 'Trust analysis failed' });
+        }
+        return;
+      }
+      if (req.method === 'GET' && requestUrl.pathname === '/api/backup/status') {
+        if (!backupService) {
+          json(res, 503, { enabled: false, error: 'Backup service is not configured' });
+          return;
+        }
+        json(res, 200, backupService.status());
+        return;
+      }
+      if (req.method === 'POST' && requestUrl.pathname === '/api/backup/export') {
+        if (!backupService) {
+          json(res, 503, { error: 'Backup service is not configured' });
+          return;
+        }
+        try {
+          const body = await readJsonBody(req, 5_000_000);
+          json(res, 200, await backupService.exportAll(body.clientState || {}));
+        } catch (error) {
+          json(res, 400, { error: error?.message || 'Backup export failed' });
+        }
+        return;
+      }
+      if (req.method === 'POST' && requestUrl.pathname === '/api/backup/import') {
+        if (!backupService) {
+          json(res, 503, { error: 'Backup service is not configured' });
+          return;
+        }
+        try {
+          const body = await readJsonBody(req, 60_000_000);
+          json(res, 200, await backupService.importAll(body.backup || body));
+        } catch (error) {
+          json(res, 400, { error: error?.message || 'Backup import failed' });
+        }
+        return;
+      }
       if (req.method === 'GET' && requestUrl.pathname === '/api/codex/status') {
         if (!codexExportService) {
           json(res, 503, { enabled: false, error: 'Codex export service is not configured' });
@@ -491,7 +582,7 @@ export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = create
         }
         try {
           const body = await readJsonBody(req, 1_500_000);
-          const result = await codexExportService.exportProject(body.project, body.insight || null);
+          const result = await codexExportService.exportProject(body.project, body.insight || null, body.trust || null);
           console.log(`[Codex] project=${JSON.stringify(body.project?.entityId || body.project?.id || '')} folder=${JSON.stringify(result.folder)}`);
           json(res, 200, result);
         } catch (error) {
@@ -533,7 +624,13 @@ if (entryPath && pathToFileURL(entryPath).href === import.meta.url) {
     await insightStore.init();
     const insightService = createInsightService({ store: insightStore });
     const codexExportService = createCodexExportService({ rootDir: ROOT_DIR });
-    const server = createOpenRadarServer({ historyStore, historyCollector, insightService, codexExportService });
+    const identityStore = new IdentityStore(resolve(ROOT_DIR, 'data/identity-overrides.json'));
+    await identityStore.init();
+    const trustStore = new TrustStore(resolve(ROOT_DIR, 'data/trust.json'));
+    await trustStore.init();
+    const trustService = createTrustService({ store: trustStore });
+    const backupService = createBackupService({ rootDir: ROOT_DIR });
+    const server = createOpenRadarServer({ historyStore, historyCollector, insightService, codexExportService, identityStore, trustService, backupService });
     server.on('error', (error) => {
       console.error('');
       if (error?.code === 'EADDRINUSE') {
@@ -547,12 +644,14 @@ if (entryPath && pathToFileURL(entryPath).href === import.meta.url) {
     });
     server.listen(DEFAULT_PORT, '127.0.0.1', () => {
       console.log('');
-      console.log('  OpenRadar Phase 0.3-C');
+      console.log('  OpenRadar Phase 0.4-A');
       console.log(`  Local: http://localhost:${DEFAULT_PORT}`);
       console.log('  Gitee: 有止损兼容通道（v5 → 官方搜索 → 首页探索 → 外部搜索）');
       console.log('  History: 本地快照已启用（启动即采集，之后每6小时采集五个平台）');
       console.log('  Insights: 本地Ollama中文解读已启用（默认模型 qwen3:4b，按需生成并缓存）');
-      console.log('  Identity: 跨平台保守去重与统一项目详情已启用');
+      console.log('  Identity: 跨平台保守去重、人工合并/拆分与主来源纠错已启用');
+      console.log('  Trust: OpenSSF Scorecard、deps.dev与OSV按需免费审计已启用');
+      console.log('  Backup: 收藏、历史、解读、可信度与Codex研究包完整迁移已启用');
       console.log('  Codex: 本地研究包导出已启用（不会自动启动Codex或消耗额度）');
       console.log('  按 Ctrl + C 停止服务器。');
       console.log('');

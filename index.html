@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07101d">
-  <meta name="description" content="跨平台开源项目发现、去重、详情、中文解读与Codex研究雷达">
+  <meta name="description" content="跨平台开源项目发现、可信度审计、人工去重纠错、完整备份、中文解读与Codex研究雷达">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
@@ -65,7 +65,7 @@
       </section>
 
       <section id="favoritesView" class="view">
-        <div class="page-title split"><div><em>PERSONAL LIBRARY</em><h1>我的收藏</h1><p>保存项目、添加标签与备注，记录下一步动作。</p></div><div><button id="export">导出 JSON</button><button id="clear" class="danger">清空收藏</button></div></div>
+        <div class="page-title split"><div><em>PERSONAL LIBRARY</em><h1>我的收藏</h1><p>保存项目、添加标签与备注，记录下一步动作。</p></div><div class="backup-actions"><button id="export">仅导出收藏</button><button id="exportBackup" class="primary">完整备份</button><button id="importBackup">导入备份</button><input id="backupFile" type="file" accept="application/json,.json" hidden><button id="clear" class="danger">清空收藏</button></div></div>
         <div class="favorite-tools"><input id="favoriteSearch" placeholder="搜索项目、分类、用途、标签或备注"><select id="tagFilter"><option value="all">全部标签</option></select></div>
         <div id="favoriteEmpty" class="empty" hidden><b>☆</b><h3>还没有收藏</h3><p>点击项目卡片右上角星标即可收藏。</p></div>
         <div id="favoriteGrid" class="grid"></div>
@@ -85,7 +85,9 @@
         </div>
         <article class="roadmap history-panel"><div class="split"><div><h3>本地历史系统</h3><p id="historyMode">检测中</p></div><button id="collectHistory" class="primary">立即采集一次</button></div><p id="historyNote">正在检测本地服务器。</p><ul><li>24小时榜：历史跨度达到约20小时后才启用</li><li>7天榜：历史跨度达到约6天后才启用</li><li>30天榜：历史跨度达到约25天后才启用</li><li>不同平台分别使用 Stars、Likes 或 Downloads，不把原始数字强行混成同一单位</li><li>本地数据保存在 <code>data/history.json</code>，不会上传到第三方</li></ul></article>
         <article class="roadmap insight-panel"><div class="split"><div><h3>免费中文大白话</h3><p id="insightMode">检测本地Ollama</p></div><button id="refreshInsights">重新检测</button></div><p id="insightNote">未检测。</p><div class="insight-mini-metrics"><span><b id="insightCount">—</b> 已缓存解读</span><span><b id="insightModel">qwen3:4b</b> 当前模型</span></div><ul><li>所有项目先显示不耗算力的规则摘要</li><li>点击“中文解读”后才调用本地模型，每次只处理一个项目</li><li>生成后保存在 <code>data/insights.json</code>，项目未更新时直接复用</li><li>模型请求结束后立即卸载，避免持续占用显存</li></ul></article>
-        <article class="roadmap"><h3>当前与后续路线</h3><ul><li>已完成保守型跨平台身份去重与统一项目详情页</li><li>已完成Codex研究包导出；不会自动消耗Codex额度</li><li>下一步：云端无人值守定时采集</li><li>收藏项目优先追踪与爆发提醒</li><li>ecosyste.ms、软件包生态与Codex MCP仓库级接入</li></ul></article>
+        <article class="roadmap trust-overview"><div class="split"><div><h3>免费可信度与供应链初筛</h3><p id="trustMode">检测OpenSSF、deps.dev与OSV本地代理</p></div><span class="provenance rule">规则判断</span></div><p id="trustNote">项目详情页中按需运行，不自动批量请求。自动结果不是安全认证。</p><ul><li>OpenSSF Scorecard：公开安全实践信号</li><li>deps.dev：仓库、软件包、许可证和依赖映射</li><li>OSV：已映射软件包版本的已知漏洞查询</li><li>事实数据、规则判断、本地AI和人工确认分别标识</li></ul></article>
+        <article class="roadmap backup-panel"><div class="split"><div><h3>完整备份与版本迁移</h3><p id="backupMode">检测本地完整备份服务</p></div><div class="backup-actions"><button id="watchExportBackup" class="primary">导出全部</button><button id="watchImportBackup">导入备份</button></div></div><p id="backupNote">完整备份包含收藏、人工纠错、历史、AI解读、可信度报告和Codex研究包。</p><ul><li>导入会替换新版目录中的本地数据，执行前必须确认</li><li>导入完成后需要重启OpenRadar</li><li>建议每次升级前先导出一份完整备份</li></ul></article>
+        <article class="roadmap"><h3>当前与后续路线</h3><ul><li>已完成保守去重、人工合并/拆分/主来源纠错</li><li>已完成免费可信度初筛与完整数据迁移</li><li>下一步：软件包生态雷达与项目对比器</li><li>收藏项目优先追踪与爆发提醒</li><li>Codex MCP仓库级接入与云端无人值守采集</li></ul></article>
       </section>
     </main>
   </div>

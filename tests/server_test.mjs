@@ -6,6 +6,8 @@ import { join } from 'node:path';
 import { createGiteeSearchService, createOpenRadarServer, parseGiteeSearchHtml } from '../server.mjs';
 import { HistoryStore } from '../history-store.mjs';
 import { createCodexExportService } from '../codex-export-service.mjs';
+import { IdentityStore } from '../identity-store.mjs';
+import { createBackupService } from '../backup-service.mjs';
 
 const fixture = `<!doctype html><html><body>
 <article class="repo-card">
@@ -106,12 +108,23 @@ const codexExportService = createCodexExportService({
   rootDir: historyRoot,
   now: () => new Date('2026-07-29T03:04:05.000Z'),
 });
+const identityStore = new IdentityStore(join(historyRoot, 'identity.json'), { now: () => Date.parse('2026-07-29T03:04:05Z') });
+await identityStore.init();
+const trustService = {
+  status: async () => ({ enabled: true, providers: ['OpenSSF Scorecard', 'deps.dev', 'OSV'] }),
+  getMany: async (ids) => Object.fromEntries(ids.map((id) => [id, { projectId: id, assessment: { level: 'medium', score: 62 } }])),
+  analyze: async (project, options) => ({ projectId: project.entityId || project.id, assessment: { level: 'medium', score: 62 }, facts: { osv: { vulnerabilityCount: 0 } }, force: Boolean(options.force) }),
+};
+const backupService = createBackupService({ rootDir: historyRoot, now: () => Date.parse('2026-07-29T03:04:05Z') });
 
 const server = createOpenRadarServer({
   historyStore,
   historyCollector,
   insightService,
   codexExportService,
+  identityStore,
+  trustService,
+  backupService,
   giteeSearch: async (query, limit) => ({
     projects: [{ full_name: 'mock/project', name: 'project', owner: { login: 'mock' }, html_url: 'https://gitee.com/mock/project' }],
     source: 'mock',
@@ -128,7 +141,35 @@ assert.equal(health.giteeProxy, true);
 assert.equal(health.history, true);
 assert.equal(health.insights, true);
 assert.equal(health.codexExport, true);
-assert.equal(health.version, '0.3-C');
+assert.equal(health.version, '0.4-A');
+assert.equal(health.identityCorrections, true);
+assert.equal(health.trust, true);
+assert.equal(health.backup, true);
+
+
+const originalIdentity = await fetch(`${base}/api/identity/overrides`).then((response) => response.json());
+assert.equal(originalIdentity.mergeGroups.length, 0);
+const savedIdentity = await fetch(`${base}/api/identity/overrides`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ mergeGroups: [{ id: 'm1', sourceIds: ['a', 'b'] }] }),
+}).then((response) => response.json());
+assert.equal(savedIdentity.mergeGroups.length, 1);
+const trustStatus = await fetch(`${base}/api/trust/status`).then((response) => response.json());
+assert.equal(trustStatus.enabled, true);
+const trustReport = await fetch(`${base}/api/trust/analyze`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ project: { id: 'github:mock/project', entityId: 'entity:mock', platform: 'github', owner: 'mock', name: 'project', url: 'https://github.com/mock/project' }, force: true }),
+}).then((response) => response.json());
+assert.equal(trustReport.assessment.score, 62);
+const backup = await fetch(`${base}/api/backup/export`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ clientState: { favorites: [{ id: 'github:mock/project' }] } }),
+}).then((response) => response.json());
+assert.equal(backup.format, 'openradar-backup');
+const importedBackup = await fetch(`${base}/api/backup/import`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ backup }),
+}).then((response) => response.json());
+assert.equal(importedBackup.requiresRestart, true);
 
 const codexStatus = await fetch(`${base}/api/codex/status`).then((response) => response.json());
 assert.equal(codexStatus.enabled, true);

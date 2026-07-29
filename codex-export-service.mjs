@@ -21,15 +21,15 @@ export function createCodexExportService({ rootDir, exportDir = resolve(rootDir,
         autoLaunch: false,
       };
     },
-    async exportProject(project, insight = null) {
+    async exportProject(project, insight = null, trust = null) {
       if (!project || typeof project !== 'object') throw new Error('Project is required');
       const generatedAt = now().toISOString();
       const slug = codexExportSlug(project);
       const folderName = `${safeTimestamp(generatedAt).slice(0, 19)}-${slug}`;
       const targetDir = resolve(absoluteExportDir, folderName);
       if (!targetDir.startsWith(absoluteExportDir)) throw new Error('Invalid export path');
-      const task = buildCodexResearchTask(project, insight, { generatedAt });
-      const context = buildCodexProjectContext(project, insight, { generatedAt });
+      const task = buildCodexResearchTask(project, insight, trust, { generatedAt });
+      const context = buildCodexProjectContext(project, insight, trust, { generatedAt });
       await mkdir(targetDir, { recursive: true });
       await writeFile(resolve(targetDir, 'RESEARCH_TASK.md'), `${task.trim()}\n`, 'utf8');
       await writeFile(resolve(targetDir, 'project-context.json'), `${JSON.stringify(context, null, 2)}\n`, 'utf8');

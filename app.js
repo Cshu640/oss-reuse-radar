@@ -3,7 +3,9 @@ import { deduplicationStats, entitiesOverlap, entityLookupIds, findEntityById, m
 import { buildCodexResearchTask, codexExportSlug } from './codex-packet.js';
 
 const FAVORITES_KEY = 'openradar:favorites:v1';
-const RADAR_CACHE_KEY = 'openradar:radar-cache:v8';
+const RADAR_CACHE_KEY = 'openradar:radar-cache:v9';
+const IDENTITY_OVERRIDES_KEY = 'openradar:identity-overrides:v1';
+const APP_VERSION = '0.4-A';
 const HISTORY_PERIOD_MAP = { today: 'day', week: 'week', month: 'month' };
 const HISTORY_TARGET_HOURS = { day: 24, week: 168, month: 720 };
 const HISTORY_COPY = {
@@ -155,6 +157,42 @@ const seed = [
   },
 ];
 
+function emptyIdentityOverrides() {
+  return { schemaVersion: 1, updatedAt: '', mergeGroups: [], blockedPairs: [], primaryByMember: {} };
+}
+
+function normalizeIdentityOverrides(value = {}) {
+  const mergeGroups = Array.isArray(value.mergeGroups)
+    ? value.mergeGroups.map((group, index) => ({
+      id: String(group?.id || `merge-${index + 1}`).slice(0, 160),
+      sourceIds: [...new Set((Array.isArray(group?.sourceIds) ? group.sourceIds : []).map(String).filter(Boolean))].slice(0, 100),
+      note: String(group?.note || '').slice(0, 500),
+      createdAt: String(group?.createdAt || '').slice(0, 80),
+    })).filter((group) => group.sourceIds.length >= 2)
+    : [];
+  const blockedPairs = [];
+  const seenPairs = new Set();
+  for (const pair of Array.isArray(value.blockedPairs) ? value.blockedPairs : []) {
+    if (!Array.isArray(pair) || pair.length < 2) continue;
+    const values = [String(pair[0] || ''), String(pair[1] || '')].filter(Boolean).sort();
+    if (values.length < 2 || values[0] === values[1]) continue;
+    const key = values.join('\u0000');
+    if (!seenPairs.has(key)) { seenPairs.add(key); blockedPairs.push(values); }
+  }
+  const primaryByMember = value.primaryByMember && typeof value.primaryByMember === 'object' && !Array.isArray(value.primaryByMember)
+    ? Object.fromEntries(Object.entries(value.primaryByMember).map(([member, primary]) => [String(member), String(primary)]).filter(([member, primary]) => member && primary))
+    : {};
+  return { schemaVersion: 1, updatedAt: String(value.updatedAt || ''), mergeGroups, blockedPairs, primaryByMember };
+}
+
+function loadIdentityOverrides() {
+  try {
+    return normalizeIdentityOverrides(JSON.parse(localStorage.getItem(IDENTITY_OVERRIDES_KEY) || 'null') || {});
+  } catch {
+    return emptyIdentityOverrides();
+  }
+}
+
 const state = {
   rawProjects: seed.map(normalizeProject),
   projects: mergeProjectEntities(seed.map(normalizeProject)).map(normalizeProject),
@@ -178,6 +216,12 @@ const state = {
   activeDetailId: '',
   codexExportAvailable: false,
   codexTask: null,
+  identityOverrides: loadIdentityOverrides(),
+  identityServiceAvailable: false,
+  trustReports: {},
+  trustServiceAvailable: false,
+  trustLoadingId: '',
+  backupAvailable: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -195,6 +239,117 @@ function loadFavorites() {
 function persistFavorites() {
   localStorage.setItem(FAVORITES_KEY, JSON.stringify(state.favorites));
   updateCounters();
+}
+
+function identityHasRules(value = state.identityOverrides) {
+  return Boolean(value.mergeGroups?.length || value.blockedPairs?.length || Object.keys(value.primaryByMember || {}).length);
+}
+
+function persistIdentityLocal() {
+  localStorage.setItem(IDENTITY_OVERRIDES_KEY, JSON.stringify(state.identityOverrides));
+}
+
+function rebuildEntities(anchorSourceId = '') {
+  state.projects = dedupeEntities(state.rawProjects);
+  state.results = dedupeEntities(state.rawResults);
+  if (anchorSourceId) {
+    const target = [...state.projects, ...state.results].find((entity) => entityLookupIds(entity).includes(anchorSourceId));
+    if (target) state.activeDetailId = projectKey(target);
+  }
+  updateCounters();
+  renderRadar();
+  if (document.getElementById('searchView')?.classList.contains('active')) renderResults();
+  if (document.getElementById('favoritesView')?.classList.contains('active')) renderFavorites();
+  if (document.getElementById('detailView')?.classList.contains('active')) renderDetail();
+}
+
+async function saveIdentityOverrides(anchorSourceId = '') {
+  state.identityOverrides = normalizeIdentityOverrides({ ...state.identityOverrides, updatedAt: new Date().toISOString() });
+  persistIdentityLocal();
+  rebuildEntities(anchorSourceId);
+  if (state.identityServiceAvailable) {
+    try {
+      state.identityOverrides = normalizeIdentityOverrides(await fetchJsonSafe('/api/identity/overrides', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state.identityOverrides),
+      }));
+      persistIdentityLocal();
+    } catch (error) {
+      toast(`人工纠错已保存在浏览器；本地文件同步失败：${readableError(error)}`);
+    }
+  }
+}
+
+async function loadIdentityOverridesFromServer() {
+  try {
+    const serverValue = normalizeIdentityOverrides(await fetchJsonSafe('/api/identity/overrides'));
+    state.identityServiceAvailable = true;
+    if (identityHasRules(serverValue) || !identityHasRules(state.identityOverrides)) {
+      state.identityOverrides = serverValue;
+      persistIdentityLocal();
+      rebuildEntities();
+    } else {
+      await saveIdentityOverrides();
+    }
+  } catch {
+    state.identityServiceAvailable = false;
+  }
+}
+
+function mergeIdentityEntities(left, right) {
+  const sourceIds = [...new Set([...entitySources(left), ...entitySources(right)].map((source) => source.id))];
+  const memberSet = new Set(sourceIds);
+  const retainedGroups = [];
+  for (const group of state.identityOverrides.mergeGroups || []) {
+    if (group.sourceIds.some((id) => memberSet.has(id))) group.sourceIds.forEach((id) => memberSet.add(id));
+    else retainedGroups.push(group);
+  }
+  const mergedIds = [...memberSet];
+  state.identityOverrides.mergeGroups = [...retainedGroups, {
+    id: `manual-${Date.now().toString(36)}`,
+    sourceIds: mergedIds,
+    note: `人工合并 ${left.owner}/${left.name} 与 ${right.owner}/${right.name}`,
+    createdAt: new Date().toISOString(),
+  }];
+  state.identityOverrides.blockedPairs = (state.identityOverrides.blockedPairs || []).filter((pair) => !(memberSet.has(pair[0]) && memberSet.has(pair[1])));
+  const primaryId = entitySources(left)[0]?.id || mergedIds[0];
+  mergedIds.forEach((id) => { state.identityOverrides.primaryByMember[id] = primaryId; });
+  return primaryId;
+}
+
+function splitIdentitySource(project, sourceId) {
+  const sourceIds = entitySources(project).map((source) => source.id);
+  const pairs = state.identityOverrides.blockedPairs || [];
+  const pairKeys = new Set(pairs.map((pair) => [...pair].sort().join('\u0000')));
+  for (const otherId of sourceIds) {
+    if (otherId === sourceId) continue;
+    const pair = [sourceId, otherId].sort();
+    const key = pair.join('\u0000');
+    if (!pairKeys.has(key)) { pairKeys.add(key); pairs.push(pair); }
+  }
+  state.identityOverrides.blockedPairs = pairs;
+  state.identityOverrides.mergeGroups = (state.identityOverrides.mergeGroups || []).map((group) => ({
+    ...group,
+    sourceIds: group.sourceIds.filter((id) => id !== sourceId),
+  })).filter((group) => group.sourceIds.length >= 2);
+  delete state.identityOverrides.primaryByMember[sourceId];
+  for (const [member, primary] of Object.entries(state.identityOverrides.primaryByMember)) {
+    if (primary === sourceId) delete state.identityOverrides.primaryByMember[member];
+  }
+}
+
+function setIdentityPrimary(project, sourceId) {
+  entitySources(project).forEach((source) => { state.identityOverrides.primaryByMember[source.id] = sourceId; });
+}
+
+function clearIdentityRules(project) {
+  const ids = new Set(entitySources(project).map((source) => source.id));
+  state.identityOverrides.mergeGroups = (state.identityOverrides.mergeGroups || []).filter((group) => !group.sourceIds.some((id) => ids.has(id)));
+  state.identityOverrides.blockedPairs = (state.identityOverrides.blockedPairs || []).filter((pair) => !pair.some((id) => ids.has(id)));
+  for (const [member, primary] of Object.entries(state.identityOverrides.primaryByMember || {})) {
+    if (ids.has(member) || ids.has(primary)) delete state.identityOverrides.primaryByMember[member];
+  }
 }
 
 function loadRadarCache() {
@@ -573,20 +728,28 @@ function bindProjectActions(root) {
 }
 
 
-function detailSourceCard(source, primaryId) {
+function provenanceBadge(kind, label = '') {
+  const labels = { fact: '事实数据', rule: '规则判断', ai: '本地AI', human: '人工确认' };
+  return `<span class="provenance ${escapeHtml(kind)}">${escapeHtml(label || labels[kind] || kind)}</span>`;
+}
+
+function detailSourceCard(source, project) {
   const meta = platformMeta(source);
+  const primaryId = project.id;
   const primary = metricValue(source, meta.primaryField);
   const secondary = metricValue(source, meta.secondaryField);
   const period = growthPeriod(source);
   const growth = period?.ready
     ? `${Number(period.deltas?.[meta.primaryField] || 0) >= 0 ? '+' : ''}${formatNumber(Number(period.deltas?.[meta.primaryField] || 0))} ${meta.primaryLabel}`
     : period ? `积累中 · ${formatDurationHours(period.coveredHours || 0)}` : '尚未追踪';
-  return `<article class="detail-source-card ${source.id === primaryId ? 'primary' : ''}">
-    <div class="split"><div><span class="badge platform">${escapeHtml(meta.label)}</span>${source.id === primaryId ? '<span class="badge good">主来源</span>' : ''}</div><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener">打开来源 ↗</a></div>
+  const sourceCount = entitySources(project).length;
+  return `<article class="detail-source-card ${source.id === primaryId ? 'is-primary' : ''}">
+    <div class="split"><div><span class="badge platform">${escapeHtml(meta.label)}</span>${source.id === primaryId ? '<span class="badge good">主来源</span>' : ''}${provenanceBadge('fact')}</div><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener">打开来源 ↗</a></div>
     <h3>${escapeHtml(source.owner || '未知作者')}/${escapeHtml(source.name)}</h3>
     <p>${escapeHtml(source.description || '暂无公开描述。')}</p>
     <div class="detail-source-metrics"><span><b>${formatNumber(primary)}</b>${escapeHtml(meta.primaryLabel)}</span><span><b>${formatNumber(secondary)}</b>${escapeHtml(meta.secondaryLabel)}</span><span><b>${escapeHtml(growth)}</b>${escapeHtml(HISTORY_COPY[state.period]?.[0] || '增长')}</span></div>
     <div class="badges">${source.language ? `<span class="badge">${escapeHtml(source.language)}</span>` : ''}<span class="badge ${commercialFriendly(source.license) ? 'good' : 'warn'}">${escapeHtml(source.license || '许可证待核查')}</span><span class="badge">更新于${escapeHtml(timeAgo(source.updatedAt))}</span></div>
+    <div class="source-correction-actions">${source.id !== primaryId ? `<button data-set-primary="${escapeHtml(source.id)}">设为主来源</button>` : ''}${sourceCount > 1 ? `<button data-split-source="${escapeHtml(source.id)}">拆分此来源</button>` : ''}</div>
   </article>`;
 }
 
@@ -616,6 +779,101 @@ function detailInsightSections(project, insight) {
     </div>`;
 }
 
+function trustForProject(project) {
+  for (const id of entityLookupIds(project)) {
+    if (state.trustReports[id]) return state.trustReports[id];
+  }
+  return null;
+}
+
+function trustLevelClass(level) {
+  return ({ lower: 'good', medium: 'warn', high: 'danger' })[level] || 'unknown';
+}
+
+function renderTrustPanel(project) {
+  const report = trustForProject(project);
+  const loading = state.trustLoadingId === projectKey(project);
+  if (!report) {
+    return `<div class="trust-empty"><div>${provenanceBadge('fact', 'OpenSSF / deps.dev / OSV')}${provenanceBadge('rule')}</div><h3>${loading ? '正在运行免费可信度审计…' : '尚未运行可信度审计'}</h3><p>按需查询OpenSSF Scorecard、deps.dev与OSV。公开数据不足不等于安全，也不等于不安全。</p></div>`;
+  }
+  const assessment = report.assessment || {};
+  const facts = report.facts || {};
+  const scorecard = facts.scorecard || {};
+  const osv = facts.osv || {};
+  const deps = facts.deps || {};
+  const lowChecks = (scorecard.checks || []).filter((check) => Number(check.score) >= 0).sort((a, b) => Number(a.score) - Number(b.score)).slice(0, 6);
+  const advisories = (osv.advisories || []).slice(0, 8);
+  return `<div class="trust-overview ${trustLevelClass(assessment.level)}">
+      <div class="trust-score"><b>${Number.isFinite(Number(assessment.score)) ? Number(assessment.score) : '—'}</b><span>规则可信度分 / 100</span></div>
+      <div><div class="provenance-row">${provenanceBadge('fact')}${provenanceBadge('rule')}</div><h3>${escapeHtml(assessment.label || '数据不足')}</h3><p>${escapeHtml(assessment.recommendation || '')}</p><small>生成于${escapeHtml(timeAgo(report.generatedAt))}；缓存24小时。自动结果不是安全认证或法律意见。</small></div>
+    </div>
+    <div class="trust-metrics">
+      <div><b>${Number.isFinite(Number(scorecard.overallScore)) ? Number(scorecard.overallScore).toFixed(1) : '—'}</b><span>OpenSSF / 10</span></div>
+      <div><b>${Number(osv.vulnerabilityCount || 0)}</b><span>OSV已知漏洞关联</span></div>
+      <div><b>${Number(deps.packages?.length || 0)}</b><span>deps.dev软件包映射</span></div>
+      <div><b>${escapeHtml(report.repository?.platform || '—')}</b><span>审计代码来源</span></div>
+    </div>
+    <div class="trust-columns">
+      <section><h3>积极信号 ${provenanceBadge('rule')}</h3><ul>${(assessment.positives || []).map((item) => `<li>${escapeHtml(item)}</li>`).join('') || '<li>暂无足够积极信号。</li>'}</ul></section>
+      <section><h3>风险与缺口 ${provenanceBadge('rule')}</h3><ul>${(assessment.warnings || []).map((item) => `<li>${escapeHtml(item)}</li>`).join('') || '<li>没有规则警告，但仍需人工审计。</li>'}</ul></section>
+      <section><h3>Scorecard低分检查 ${provenanceBadge('fact')}</h3><ul>${lowChecks.map((check) => `<li><b>${escapeHtml(check.name)}</b> ${escapeHtml(String(check.score))}/10 · ${escapeHtml(check.reason || '无原因说明')}</li>`).join('') || '<li>没有可用的检查明细。</li>'}</ul></section>
+      <section><h3>OSV关联 ${provenanceBadge('fact')}</h3><ul>${advisories.map((item) => `<li><b>${escapeHtml(item.id)}</b> · ${escapeHtml(item.package?.system || '')}/${escapeHtml(item.package?.name || '')}@${escapeHtml(item.package?.version || '')}</li>`).join('') || '<li>未返回已知漏洞，或缺少可精确查询的软件包版本。</li>'}</ul></section>
+    </div>`;
+}
+
+async function loadCachedTrust(project) {
+  if (!state.trustServiceAvailable || !project || trustForProject(project)) return;
+  try {
+    const ids = entityLookupIds(project).slice(0, 30);
+    const response = await fetchJsonSafe(`/api/trust?ids=${encodeURIComponent(ids.join(','))}`);
+    Object.assign(state.trustReports, response.reports || {});
+    if (state.activeDetailId) renderDetail();
+  } catch {
+    // Trust is optional and must not block project details.
+  }
+}
+
+async function analyzeTrust(project, force = false) {
+  if (!state.trustServiceAvailable) {
+    toast('请使用 node server.mjs 启动本地可信度服务');
+    return;
+  }
+  const key = projectKey(project);
+  state.trustLoadingId = key;
+  renderDetail();
+  try {
+    const report = await fetchJsonSafe('/api/trust/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project, force }),
+    });
+    state.trustReports[report.projectId || key] = report;
+    toast('免费可信度审计完成');
+  } catch (error) {
+    toast(`可信度审计失败：${readableError(error)}`);
+  } finally {
+    state.trustLoadingId = '';
+    renderDetail();
+  }
+}
+
+function identityCorrectionPanel(project) {
+  const sources = entitySources(project);
+  const currentIds = new Set(sources.map((source) => source.id));
+  const candidates = [...new Map([...state.projects, ...state.results]
+    .filter((candidate) => !entitiesOverlap(candidate, project))
+    .map((candidate) => [projectKey(candidate), candidate])).values()]
+    .slice(0, 250);
+  const options = candidates.map((candidate) => `<option value="${escapeHtml(projectKey(candidate))}">${escapeHtml(candidate.owner)}/${escapeHtml(candidate.name)} · ${escapeHtml(candidate.sourcePlatforms?.join('+') || candidate.platform)}</option>`).join('');
+  const hasRelatedRules = (state.identityOverrides.mergeGroups || []).some((group) => group.sourceIds.some((id) => currentIds.has(id)))
+    || (state.identityOverrides.blockedPairs || []).some((pair) => pair.some((id) => currentIds.has(id)))
+    || Object.entries(state.identityOverrides.primaryByMember || {}).some(([member, primary]) => currentIds.has(member) || currentIds.has(primary));
+  return `<section class="detail-section identity-panel"><div class="section-title"><div><h2>身份纠错 ${project.humanConfirmed ? provenanceBadge('human') : provenanceBadge('rule')}</h2><p>自动合并只使用强信号。你可以手动合并、拆分或指定主来源；决定会写入本地并进入完整备份。</p></div>${hasRelatedRules ? '<button data-clear-identity>清除相关人工规则</button>' : ''}</div>
+    <div class="identity-merge-row"><select id="identityMergeTarget"><option value="">选择另一个项目实体…</option>${options}</select><button data-merge-identity ${options ? '' : 'disabled'}>人工合并</button></div>
+    <p class="identity-note">${sources.length > 1 ? `当前实体含${sources.length}个来源；拆分按钮位于每张来源卡底部。` : '当前只有一个来源；可从下拉框选择另一个项目人工合并。'} 人工判断仍需以官方互链、组织身份与许可证为证据。</p>
+  </section>`;
+}
+
 function copyText(value) {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(value);
   const textarea = document.createElement('textarea');
@@ -639,6 +897,103 @@ function downloadText(value, filename, type = 'text/markdown') {
   URL.revokeObjectURL(url);
 }
 
+
+function downloadJson(value, filename) {
+  downloadText(JSON.stringify(value, null, 2), filename, 'application/json');
+}
+
+function backupClientState() {
+  return {
+    favorites: state.favorites,
+    identityOverrides: state.identityOverrides,
+    settings: {
+      category: state.category,
+      period: state.period,
+      platform: els.platform?.value || 'all',
+      license: els.license?.value || 'all',
+      useType: els.useType?.value || 'all',
+    },
+  };
+}
+
+function renderServiceStatuses() {
+  if (els.trustMode) els.trustMode.textContent = state.trustServiceAvailable ? '已启用 · 项目详情页按需审计' : '未启用 · 请用 node server.mjs 启动';
+  if (els.trustNote) els.trustNote.textContent = state.trustServiceAvailable
+    ? 'OpenSSF Scorecard、deps.dev与OSV通过本地同源服务查询；事实与规则结论分开显示。'
+    : '静态模式不运行可信度服务；项目浏览、收藏和规则摘要不受影响。';
+  if (els.backupMode) els.backupMode.textContent = state.backupAvailable ? '已启用 · 可迁移全部本地数据' : '仅浏览器数据备份';
+  if (els.backupNote) els.backupNote.textContent = state.backupAvailable
+    ? '完整备份包含收藏、人工纠错、历史、AI解读、可信度报告和Codex研究包。'
+    : '当前只能导出收藏、人工纠错与设置；历史和本地文件需要 node server.mjs。';
+}
+
+async function exportFullBackup() {
+  const clientState = backupClientState();
+  let backup;
+  if (state.backupAvailable) {
+    backup = await fetchJsonSafe('/api/backup/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientState }),
+    });
+  } else {
+    backup = {
+      format: 'openradar-browser-backup',
+      backupVersion: 1,
+      createdAt: new Date().toISOString(),
+      appVersion: APP_VERSION,
+      clientState,
+      warning: '静态模式备份不含历史、AI解读、可信度缓存和Codex研究包。',
+    };
+  }
+  downloadJson(backup, `openradar-full-backup-${new Date().toISOString().slice(0, 10)}.json`);
+  toast(state.backupAvailable ? '完整备份已导出' : '浏览器数据备份已导出');
+}
+
+async function importFullBackupFile(file) {
+  if (!file) return;
+  let backup;
+  try {
+    backup = JSON.parse(await file.text());
+  } catch {
+    toast('备份文件不是有效JSON');
+    return;
+  }
+  const supported = ['openradar-backup', 'openradar-browser-backup'].includes(backup?.format);
+  if (!supported) return toast('不是受支持的OpenRadar备份');
+  if (!confirm('导入会替换当前收藏、人工纠错及本地数据。确认已备份当前版本并继续吗？')) return;
+  try {
+    let clientState = backup.clientState || {};
+    let message = '浏览器数据已恢复。';
+    if (backup.format === 'openradar-backup') {
+      if (!state.backupAvailable) throw new Error('完整备份必须使用 node server.mjs 导入');
+      const result = await fetchJsonSafe('/api/backup/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backup }),
+      });
+      clientState = result.clientState || clientState;
+      message = result.message || '完整备份已导入。';
+    }
+    state.favorites = (Array.isArray(clientState.favorites) ? clientState.favorites : []).map(normalizeProject);
+    state.identityOverrides = normalizeIdentityOverrides(clientState.identityOverrides || {});
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(state.favorites));
+    persistIdentityLocal();
+    const settings = clientState.settings || {};
+    if (categories.includes(settings.category)) state.category = settings.category;
+    if (HISTORY_COPY[settings.period]) state.period = settings.period;
+    if ([...els.platform.options].some((option) => option.value === settings.platform)) els.platform.value = settings.platform;
+    if ([...els.license.options].some((option) => option.value === settings.license)) els.license.value = settings.license;
+    if ([...els.useType.options].some((option) => option.value === settings.useType)) els.useType.value = settings.useType;
+    rebuildEntities();
+    alert(`${message}\n\n请关闭黑色服务器窗口并重新运行 start-openradar.cmd，以重新载入历史、解读和可信度缓存。`);
+  } catch (error) {
+    toast(`导入失败：${readableError(error)}`);
+  } finally {
+    if (els.backupFile) els.backupFile.value = '';
+  }
+}
+
 async function prepareCodexResearch(project) {
   const key = projectKey(project);
   const button = els.detailContent.querySelector('[data-codex]');
@@ -647,18 +1002,19 @@ async function prepareCodexResearch(project) {
     button.textContent = '正在准备研究包…';
   }
   const insight = projectInsight(project);
+  const trust = trustForProject(project);
   let packet;
   try {
     if (!state.codexExportAvailable) throw new Error('本地导出服务未启用');
     packet = await fetchJsonSafe('/api/codex/export', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project: { ...project, plainSummary: rulePlainSummary(project) }, insight }),
+      body: JSON.stringify({ project: { ...project, plainSummary: rulePlainSummary(project) }, insight, trust }),
     });
   } catch (error) {
     packet = {
       ok: true,
-      task: buildCodexResearchTask({ ...project, plainSummary: rulePlainSummary(project) }, insight),
+      task: buildCodexResearchTask({ ...project, plainSummary: rulePlainSummary(project) }, insight, trust),
       folder: '',
       files: [],
       autoLaunch: false,
@@ -685,6 +1041,7 @@ function renderDetail() {
   }
   const favorite = favoriteForProject(project);
   const insight = projectInsight(project);
+  const trust = trustForProject(project);
   const sources = entitySources(project);
   const packet = state.codexTask?.projectKey === projectKey(project) ? state.codexTask : null;
   const licenseVariants = [...new Set(sources.map((source) => source.license).filter(Boolean))];
@@ -700,8 +1057,10 @@ function renderDetail() {
     </article>
     <div class="detail-badges"><span class="badge">${escapeHtml(project.category || classifyCategory(project))}</span>${useBadges}${languages.map((language) => `<span class="badge">${escapeHtml(language)}</span>`).join('')}${licenseVariants.map((license) => `<span class="badge ${commercialFriendly(license) ? 'good' : 'warn'}">${escapeHtml(license)}</span>`).join('')}</div>
     ${topics.length ? `<div class="detail-topics">${topics.map((topic) => `<span>${escapeHtml(topic)}</span>`).join('')}</div>` : ''}
-    <section class="detail-section"><div class="section-title"><div><h2>统一中文情报</h2><p>同一项目的多平台来源合并后，只保留一张完整情报卡。</p></div><button data-analyze="${escapeHtml(projectKey(project))}">${insight ? '查看/更新中文解读' : '生成中文解读'}</button></div>${detailInsightSections(project, insight)}</section>
-    <section class="detail-section"><div class="section-title"><div><h2>跨平台来源</h2><p>${sources.length > 1 ? `已通过${escapeHtml((project.dedupReasons || []).join('、') || '身份信号')}合并${sources.length}条来源；采用前仍需让Codex核验是否真为同一项目。` : '当前只发现一个来源。'}</p></div><span>${sources.length} SOURCES</span></div><div class="detail-source-grid">${sources.map((source) => detailSourceCard(source, project.id)).join('')}</div></section>
+    <section class="detail-section"><div class="section-title"><div><h2>统一中文情报 ${insight?.source === 'ollama' ? provenanceBadge('ai') : provenanceBadge('rule')}</h2><p>同一项目的多平台来源合并后，只保留一张完整情报卡。</p></div><button data-analyze="${escapeHtml(projectKey(project))}">${insight ? '查看/更新中文解读' : '生成中文解读'}</button></div>${detailInsightSections(project, insight)}</section>
+    <section class="detail-section trust-panel"><div class="section-title"><div><h2>安全与可信度</h2><p>免费按需查询OpenSSF Scorecard、deps.dev与OSV；自动结果只用于风险筛查。</p></div><button data-trust ${state.trustLoadingId === projectKey(project) ? 'disabled' : ''}>${state.trustLoadingId === projectKey(project) ? '审计中…' : (trust ? '重新审计' : '运行免费审计')}</button></div>${renderTrustPanel(project)}</section>
+    <section class="detail-section"><div class="section-title"><div><h2>跨平台来源 ${provenanceBadge('fact')}</h2><p>${sources.length > 1 ? `已通过${escapeHtml((project.dedupReasons || []).join('、') || '身份信号')}合并${sources.length}条来源；采用前仍需让Codex核验是否真为同一项目。` : '当前只发现一个来源。'}</p></div><span>${sources.length} SOURCES</span></div><div class="detail-source-grid">${sources.map((source) => detailSourceCard(source, project)).join('')}</div></section>
+    ${identityCorrectionPanel(project)}
     <section class="detail-section codex-panel"><div><em>CODEX RESEARCH PACKET</em><h2>一键交给 Codex 研究</h2><p>生成一份包含所有平台来源、中文解读、许可证核查、维护健康、安全风险、替代方案和强制交接格式的研究任务。当前版本不会自动启动Codex，也不会在你不知情时消耗额度。</p></div><button class="primary codex-button" data-codex>生成并复制研究任务</button>${packetResult}</section>`;
 
   els.detailContent.querySelector('#detailBack').onclick = () => {
@@ -710,7 +1069,40 @@ function renderDetail() {
   };
   els.detailContent.querySelector('[data-favorite]').onclick = () => openFavoriteDialog(projectKey(project));
   els.detailContent.querySelector('[data-analyze]').onclick = () => openInsightDialog(projectKey(project));
+  els.detailContent.querySelector('[data-trust]').onclick = () => void analyzeTrust(project, Boolean(trust));
   els.detailContent.querySelector('[data-codex]').onclick = () => void prepareCodexResearch(project);
+  els.detailContent.querySelectorAll('[data-set-primary]').forEach((button) => {
+    button.onclick = async () => {
+      setIdentityPrimary(project, button.dataset.setPrimary);
+      await saveIdentityOverrides(button.dataset.setPrimary);
+      toast('已指定人工主来源');
+    };
+  });
+  els.detailContent.querySelectorAll('[data-split-source]').forEach((button) => {
+    button.onclick = async () => {
+      const sourceId = button.dataset.splitSource;
+      if (!confirm('确定把这个来源从当前实体拆分吗？此决定会保存到人工纠错规则。')) return;
+      splitIdentitySource(project, sourceId);
+      await saveIdentityOverrides(sourceId);
+      toast('来源已拆分');
+    };
+  });
+  els.detailContent.querySelector('[data-merge-identity]')?.addEventListener('click', async () => {
+    const targetId = els.detailContent.querySelector('#identityMergeTarget')?.value;
+    const target = findProject(targetId);
+    if (!target) return toast('请选择要合并的项目');
+    if (!confirm(`确定人工合并 ${project.owner}/${project.name} 与 ${target.owner}/${target.name} 吗？`)) return;
+    const anchor = mergeIdentityEntities(project, target);
+    await saveIdentityOverrides(anchor);
+    toast('项目已人工合并');
+  });
+  els.detailContent.querySelector('[data-clear-identity]')?.addEventListener('click', async () => {
+    if (!confirm('确定清除此项目相关的人工合并、拆分和主来源规则吗？')) return;
+    const anchor = entitySources(project)[0]?.id;
+    clearIdentityRules(project);
+    await saveIdentityOverrides(anchor);
+    toast('相关人工纠错规则已清除');
+  });
   els.detailContent.querySelector('[data-share-detail]').onclick = async () => {
     await copyText(location.href);
     toast('详情链接已复制');
@@ -728,6 +1120,7 @@ function openProjectDetail(id, pushHash = true) {
   state.activeDetailId = projectKey(project);
   if (pushHash) location.hash = `project=${encodeURIComponent(state.activeDetailId)}`;
   navigate('detail');
+  void loadCachedTrust(project);
 }
 
 function openHashProject() {
@@ -1135,7 +1528,7 @@ function dedupeProjects(projects) {
 }
 
 function dedupeEntities(projects) {
-  return mergeProjectEntities(dedupeProjects(projects)).map(normalizeProject);
+  return mergeProjectEntities(dedupeProjects(projects), state.identityOverrides).map(normalizeProject);
 }
 
 function unique(values) {
@@ -1283,11 +1676,20 @@ async function detectRuntimeMode() {
     const health = await response.json();
     if (!health.giteeProxy) throw new Error('兼容通道未启用');
     state.codexExportAvailable = Boolean(health.codexExport);
+    state.identityServiceAvailable = Boolean(health.identityCorrections);
+    state.trustServiceAvailable = Boolean(health.trust);
+    state.backupAvailable = Boolean(health.backup);
     els.runtimeMode.textContent = '● 本地兼容服务';
     els.runtimeMode.className = 'runtime-live';
-    els.runtimeDetail.textContent = health.insights ? `五平台实时 · 跨平台去重 · 历史、本地AI与${health.codexExport ? 'Codex研究包' : '浏览器研究提示词'}` : '五平台实时 · 跨平台去重 · 本地历史';
+    els.runtimeDetail.textContent = health.insights ? `五平台实时 · 历史、本地AI、可信度、完整备份与${health.codexExport ? 'Codex研究包' : '浏览器研究提示词'}` : '五平台实时 · 跨平台纠错 · 本地历史与完整备份';
+    renderServiceStatuses();
+    if (state.identityServiceAvailable) await loadIdentityOverridesFromServer();
   } catch {
     state.codexExportAvailable = false;
+    state.identityServiceAvailable = false;
+    state.trustServiceAvailable = false;
+    state.backupAvailable = false;
+    renderServiceStatuses();
     els.runtimeMode.textContent = '● 静态模式';
     els.runtimeMode.className = 'runtime-warn';
     els.runtimeDetail.textContent = '五平台可用 · Gitee请改用 node server.mjs';
@@ -1380,15 +1782,19 @@ function init() {
   els.favoriteSearch.oninput = renderFavorites;
   els.tagFilter.onchange = renderFavorites;
 
-  els.export.onclick = () => {
-    const blob = new Blob([JSON.stringify(state.favorites, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `openradar-favorites-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
+  els.export.onclick = () => downloadJson(state.favorites, `openradar-favorites-${new Date().toISOString().slice(0, 10)}.json`);
+  [els.exportBackup, els.watchExportBackup].filter(Boolean).forEach((button) => {
+    button.onclick = async () => {
+      button.disabled = true;
+      try { await exportFullBackup(); }
+      catch (error) { toast(`备份失败：${readableError(error)}`); }
+      finally { button.disabled = false; }
+    };
+  });
+  [els.importBackup, els.watchImportBackup].filter(Boolean).forEach((button) => {
+    button.onclick = () => els.backupFile?.click();
+  });
+  if (els.backupFile) els.backupFile.onchange = () => void importFullBackupFile(els.backupFile.files?.[0]);
 
   if (els.refreshInsights) {
     els.refreshInsights.onclick = async () => {
@@ -1461,6 +1867,7 @@ function init() {
   updateCounters();
   renderHistoryStatus();
   renderInsightStatus();
+  renderServiceStatuses();
   radar(false);
   openHashProject();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});

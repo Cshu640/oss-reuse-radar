@@ -40,7 +40,18 @@ export function codexExportSlug(project) {
   return value || 'open-source-project';
 }
 
-export function buildCodexResearchTask(project, insight = null, { generatedAt = new Date().toISOString() } = {}) {
+function splitTrustAndOptions(trustOrOptions, maybeOptions = {}) {
+  const looksLikeLegacyOptions = trustOrOptions && typeof trustOrOptions === 'object'
+    && !('assessment' in trustOrOptions) && !('facts' in trustOrOptions) && !('provenance' in trustOrOptions)
+    && ('generatedAt' in trustOrOptions);
+  return looksLikeLegacyOptions
+    ? { trust: null, options: trustOrOptions }
+    : { trust: trustOrOptions || null, options: maybeOptions || {} };
+}
+
+export function buildCodexResearchTask(project, insight = null, trustOrOptions = null, maybeOptions = {}) {
+  const { trust, options } = splitTrustAndOptions(trustOrOptions, maybeOptions);
+  const { generatedAt = new Date().toISOString() } = options;
   if (!project?.id || !project?.name) throw new Error('Project identity is required');
   const summary = text(insight?.summary || project?.plainSummary || project?.description, 2_000) || 'OpenRadar尚未生成中文摘要。';
   const sourceCount = Number(project.sourceCount || project.sourceProjects?.length || 1);
@@ -74,8 +85,17 @@ ${sourceRows(project)}
 - 对用户的适配：${text(insight?.fitForUser, 2_000) || '用户偏好低成本复用开源项目，由Codex实施，主要设备为Windows与NVIDIA 8GB显存'}
 - 当前置信度：${confidence}
 
+## OpenRadar免费可信度初筛
+- 结论：${text(trust?.assessment?.label, 300) || '尚未运行可信度审计'}
+- 规则分：${Number.isFinite(Number(trust?.assessment?.score)) ? `${Number(trust.assessment.score)}/100` : '未计算'}
+- OpenSSF Scorecard：${Number.isFinite(Number(trust?.facts?.scorecard?.overallScore)) ? `${Number(trust.facts.scorecard.overallScore).toFixed(1)}/10` : '无公开结果'}
+- OSV已知漏洞关联：${Number(trust?.facts?.osv?.vulnerabilityCount || 0)}
+- deps.dev软件包映射：${Number(trust?.facts?.deps?.packages?.length || 0)}
+- 注意：以上包含第三方事实数据与OpenRadar规则判断，不是安全认证；Codex必须重新核验。
+
 ## 已知风险
 ${riskRows(insight)}
+${list(trust?.assessment?.warnings, '尚未运行OpenSSF、deps.dev与OSV初筛')}
 
 ## 你的唯一任务
 对上述开源项目进行**证据驱动的技术、许可证、维护和接入审计**，输出是否值得用于用户当前或未来项目。只研究，不集成，不修改现有仓库。
@@ -142,7 +162,9 @@ ${riskRows(insight)}
 `;
 }
 
-export function buildCodexProjectContext(project, insight = null, { generatedAt = new Date().toISOString() } = {}) {
+export function buildCodexProjectContext(project, insight = null, trustOrOptions = null, maybeOptions = {}) {
+  const { trust, options } = splitTrustAndOptions(trustOrOptions, maybeOptions);
+  const { generatedAt = new Date().toISOString() } = options;
   return {
     schemaVersion: 1,
     generatedAt,
@@ -170,6 +192,13 @@ export function buildCodexProjectContext(project, insight = null, { generatedAt 
       updatedAt: text(source.updatedAt, 100),
       topics: unique(source.topics || []).slice(0, 40),
     })),
+    trust: trust ? {
+      generatedAt: text(trust.generatedAt, 100),
+      repository: trust.repository || null,
+      assessment: trust.assessment || null,
+      facts: trust.facts || null,
+      provenance: Array.isArray(trust.provenance) ? trust.provenance.slice(0, 20) : [],
+    } : null,
     insight: insight ? {
       source: text(insight.source, 100),
       model: text(insight.model, 100),

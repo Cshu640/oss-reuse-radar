@@ -123,7 +123,9 @@ function safeDate(values, mode) {
   return new Date(mode === 'min' ? Math.min(...dates) : Math.max(...dates)).toISOString();
 }
 
-function primaryForGroup(group) {
+function primaryForGroup(group, preferredId = '') {
+  const preferred = preferredId && group.find((project) => project.id === preferredId);
+  if (preferred) return preferred;
   return [...group].sort((a, b) => {
     const quality = sourceQuality(b) - sourceQuality(a);
     if (quality) return quality;
@@ -131,12 +133,35 @@ function primaryForGroup(group) {
   })[0];
 }
 
-function entityFromGroup(group, matches) {
+function overridePairKey(left, right) {
+  return [text(left, 320), text(right, 320)].filter(Boolean).sort().join('\u0000');
+}
+
+function normalizedOverrides(value = {}) {
+  const mergeGroups = Array.isArray(value.mergeGroups)
+    ? value.mergeGroups.map((group) => ({
+      id: text(group?.id, 160),
+      sourceIds: unique(Array.isArray(group?.sourceIds) ? group.sourceIds.map((id) => text(id, 320)) : []),
+      note: text(group?.note, 500),
+    })).filter((group) => group.sourceIds.length >= 2)
+    : [];
+  const blockedPairs = new Set();
+  for (const pair of Array.isArray(value.blockedPairs) ? value.blockedPairs : []) {
+    if (!Array.isArray(pair) || pair.length < 2 || pair[0] === pair[1]) continue;
+    blockedPairs.add(overridePairKey(pair[0], pair[1]));
+  }
+  const primaryByMember = value.primaryByMember && typeof value.primaryByMember === 'object' && !Array.isArray(value.primaryByMember)
+    ? Object.fromEntries(Object.entries(value.primaryByMember).map(([member, primary]) => [text(member, 320), text(primary, 320)]).filter(([member, primary]) => member && primary))
+    : {};
+  return { mergeGroups, blockedPairs, primaryByMember };
+}
+
+function entityFromGroup(group, matches, preferredId = '', humanConfirmed = false) {
   const sources = [...group].sort((a, b) => sourceQuality(b) - sourceQuality(a));
-  const primary = primaryForGroup(sources);
+  const primary = primaryForGroup(sources, preferredId);
   const signal = projectIdentitySignals(primary);
   const anchors = unique(matches.map((match) => match?.anchor));
-  const identityAnchor = anchors[0] || (signal.slug ? `slug:${signal.slug}` : `id:${primary.id}`);
+  const identityAnchor = anchors[0] || (humanConfirmed ? `manual:${sources.map((source) => source.id).sort().join('|')}` : (signal.slug ? `slug:${signal.slug}` : `id:${primary.id}`));
   const description = [...sources].map((project) => text(project.description, 2_000)).sort((a, b) => b.length - a.length)[0] || '';
   const licenses = unique(sources.map((project) => text(project.license, 200))).filter((license) => !/待核查|unknown/i.test(license));
   const languages = unique(sources.map((project) => text(project.language, 120)));
@@ -154,23 +179,27 @@ function entityFromGroup(group, matches) {
     updatedAt: safeDate(sources.map((project) => project.updatedAt), 'max') || primary.updatedAt,
     entityId: `entity:${hashText(identityAnchor)}`,
     identityAnchor,
-    identityConfidence: sources.length > 1 ? 'high' : 'single-source',
+    identityConfidence: humanConfirmed ? 'human-confirmed' : (sources.length > 1 ? 'high' : 'single-source'),
     aliases: unique(sources.map((project) => project.id)),
     sourceProjects: sources.map((project) => ({ ...project, sourceProjects: undefined })),
     sourcePlatforms,
     sourceCount: sources.length,
     licenseVariants: unique(sources.map((project) => text(project.license, 200))),
     languages,
-    dedupReasons: unique(matches.map((match) => match?.reason)),
+    dedupReasons: unique([...matches.map((match) => match?.reason), ...(humanConfirmed ? ['human-merge'] : [])]),
+    humanConfirmed,
   };
 }
 
-export function mergeProjectEntities(projects = []) {
+export function mergeProjectEntities(projects = [], overrideValue = {}) {
   const flat = projectSources({ sourceProjects: Array.isArray(projects) ? projects : [] })
     .filter((project) => project?.id && project?.name && project?.url);
   const byId = [...new Map(flat.map((project) => [project.id, { ...project }])).values()];
+  const indexById = new Map(byId.map((project, index) => [project.id, index]));
+  const overrides = normalizedOverrides(overrideValue);
   const parent = byId.map((_, index) => index);
   const pairReasons = new Map();
+  const manualMembers = new Set();
   const find = (index) => {
     while (parent[index] !== index) {
       parent[index] = parent[parent[index]];
@@ -186,11 +215,19 @@ export function mergeProjectEntities(projects = []) {
 
   for (let left = 0; left < byId.length; left += 1) {
     for (let right = left + 1; right < byId.length; right += 1) {
+      if (overrides.blockedPairs.has(overridePairKey(byId[left].id, byId[right].id))) continue;
       const match = pairMatch(byId[left], byId[right]);
       if (!match) continue;
       union(left, right);
       pairReasons.set(`${left}:${right}`, match);
     }
+  }
+
+  for (const mergeGroup of overrides.mergeGroups) {
+    const indexes = mergeGroup.sourceIds.map((id) => indexById.get(id)).filter(Number.isInteger);
+    if (indexes.length < 2) continue;
+    indexes.forEach((index) => manualMembers.add(byId[index].id));
+    for (let index = 1; index < indexes.length; index += 1) union(indexes[0], indexes[index]);
   }
 
   const groups = new Map();
@@ -202,10 +239,14 @@ export function mergeProjectEntities(projects = []) {
 
   return [...groups.values()].map((entries) => {
     const indexes = new Set(entries.map((entry) => entry.index));
+    const projectsInGroup = entries.map((entry) => entry.project);
+    const sourceIds = new Set(projectsInGroup.map((project) => project.id));
     const matches = [...pairReasons.entries()]
       .filter(([key]) => key.split(':').every((value) => indexes.has(Number(value))))
       .map(([, match]) => match);
-    return entityFromGroup(entries.map((entry) => entry.project), matches);
+    const preferredId = projectsInGroup.map((project) => overrides.primaryByMember[project.id]).find((id) => sourceIds.has(id)) || '';
+    const humanConfirmed = projectsInGroup.some((project) => manualMembers.has(project.id));
+    return entityFromGroup(projectsInGroup, matches, preferredId, humanConfirmed);
   });
 }
 

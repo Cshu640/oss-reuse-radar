@@ -94,3 +94,19 @@ const sameNameDifferentOwners = mergeProjectEntities([
 assert.equal(sameNameDifferentOwners.length, 2, 'Name-only matching must never merge projects');
 
 console.log(JSON.stringify({ entities: entities.length, mergedSources: merged.sourceCount, stats }, null, 2));
+
+const blocked = mergeProjectEntities([github, huggingface, modelscopeLinked], {
+  blockedPairs: [[github.id, huggingface.id], [github.id, modelscopeLinked.id]],
+});
+assert.equal(blocked.length, 3);
+assert.equal(findEntityById(blocked, github.id).sourceCount, 1);
+
+const manualDifferent = mergeProjectEntities([github, unrelatedSameName], {
+  mergeGroups: [{ id: 'human-1', sourceIds: [github.id, unrelatedSameName.id], note: '人工确认' }],
+  primaryByMember: { [github.id]: unrelatedSameName.id, [unrelatedSameName.id]: unrelatedSameName.id },
+});
+assert.equal(manualDifferent.length, 1);
+assert.equal(manualDifferent[0].humanConfirmed, true);
+assert.equal(manualDifferent[0].identityConfidence, 'human-confirmed');
+assert.equal(manualDifferent[0].id, unrelatedSameName.id);
+assert.ok(manualDifferent[0].dedupReasons.includes('human-merge'));

@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createBackupService } from '../backup-service.mjs';
+
+const source = await mkdtemp(join(tmpdir(), 'openradar-backup-source-'));
+await mkdir(join(source, 'data'), { recursive: true });
+await writeFile(join(source, 'data/history.json'), JSON.stringify({ schemaVersion: 1, projects: { a: { samples: [1] } } }));
+await writeFile(join(source, 'data/insights.json'), JSON.stringify({ schemaVersion: 1, insights: { a: { summary: '中文' } } }));
+await writeFile(join(source, 'data/trust.json'), JSON.stringify({ schemaVersion: 1, reports: { a: { assessment: { level: 'medium' } } } }));
+await writeFile(join(source, 'data/identity-overrides.json'), JSON.stringify({ schemaVersion: 1, mergeGroups: [{ id: 'm', sourceIds: ['a', 'b'] }] }));
+await mkdir(join(source, 'exports/codex/p1'), { recursive: true });
+await writeFile(join(source, 'exports/codex/p1/RESEARCH_TASK.md'), '# Research');
+await writeFile(join(source, 'exports/codex/p1/project-context.json'), JSON.stringify({ entityId: 'a' }));
+const service = createBackupService({ rootDir: source, now: () => Date.parse('2026-07-29T05:00:00Z') });
+const backup = await service.exportAll({ favorites: [{ id: 'a' }], identityOverrides: { mergeGroups: [] }, settings: { period: 'week' } });
+assert.equal(backup.format, 'openradar-backup');
+assert.equal(backup.serverData.codexPackets.length, 1);
+assert.equal(backup.serverData.history.projects.a.samples.length, 1);
+
+const target = await mkdtemp(join(tmpdir(), 'openradar-backup-target-'));
+const targetService = createBackupService({ rootDir: target, now: () => Date.parse('2026-07-29T06:00:00Z') });
+const result = await targetService.importAll(backup);
+assert.equal(result.requiresRestart, true);
+assert.equal(result.restoredPackets, 1);
+assert.equal(result.clientState.favorites[0].id, 'a');
+assert.match(await readFile(join(target, 'data/history.json'), 'utf8'), /samples/);
+await access(join(target, 'exports/codex/p1/RESEARCH_TASK.md'));
+await rm(source, { recursive: true, force: true });
+await rm(target, { recursive: true, force: true });
+console.log(JSON.stringify({ status: service.status(), restoredPackets: result.restoredPackets }, null, 2));

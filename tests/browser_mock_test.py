@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mocked browser smoke test for OpenRadar Phase 0.3-C.
+"""Mocked browser smoke test for OpenRadar Phase 0.4-A.
 
 No external network is used. The test validates six adapter schemas, conservative
 cross-platform identity merging, unified project details, Codex research packet
@@ -14,7 +14,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
-SCREENSHOT = Path('/mnt/data/open-source-radar-phase-0.3-c-browser.png')
+SCREENSHOT = Path('/mnt/data/open-source-radar-phase-0.4-a-browser.png')
 
 
 def make_inline_module(source: str) -> str:
@@ -41,6 +41,7 @@ def build_html() -> str:
 <script>
 window.__requestedUrls = [];
 window.__copiedText = '';
+window.__identityOverrides = { schemaVersion: 1, mergeGroups: [], blockedPairs: [], primaryByMember: {} };
 Object.defineProperty(navigator, 'clipboard', {
   configurable: true,
   value: { writeText: async (value) => { window.__copiedText = String(value); } }
@@ -87,7 +88,13 @@ window.fetch = (input, options = {}) => {
   ]);
   if (url.includes('gitlab.com/api/v4/projects')) return jsonResponse([repo('gitlab', 1)]);
   if (url.includes('codeberg.org/api/v1/repos/search')) return jsonResponse({ ok: true, data: [repo('codeberg', 1)] });
-  if (url.includes('/api/health')) return jsonResponse({ status: 'ok', version: '0.3-C', giteeProxy: true, history: true, insights: true, codexExport: true });
+  if (url.includes('/api/health')) return jsonResponse({ status: 'ok', version: '0.4-A', giteeProxy: true, history: true, insights: true, codexExport: true, identityCorrections: true, trust: true, backup: true });
+  if (url.includes('/api/identity/overrides')) { if (options.method === 'POST') window.__identityOverrides = JSON.parse(options.body); return jsonResponse(window.__identityOverrides); }
+  if (url.includes('/api/trust/status')) return jsonResponse({ enabled: true, providers: ['OpenSSF Scorecard', 'deps.dev', 'OSV'] });
+  if (url.includes('/api/trust?')) return jsonResponse({ reports: {} });
+  if (url.includes('/api/trust/analyze')) return jsonResponse({ projectId: 'entity:xb20li', generatedAt: '2026-07-29T04:05:06Z', repository: { platform: 'github' }, assessment: { score: 74, level: 'medium', label: '中等风险信号', positives: ['近期维护信号较好。'], warnings: ['安全策略需要核验。'], recommendation: '适合小范围验证。' }, facts: { scorecard: { overallScore: 7.4, checks: [{ name: 'Security-Policy', score: 3, reason: 'missing' }] }, deps: { packages: [{ system: 'NPM', name: 'demo' }] }, osv: { vulnerabilityCount: 0, advisories: [] } }, provenance: [] });
+  if (url.includes('/api/backup/status')) return jsonResponse({ enabled: true, format: 'openradar-backup', version: 1 });
+  if (url.includes('/api/backup/export')) return jsonResponse({ format: 'openradar-backup', backupVersion: 1, clientState: JSON.parse(options.body).clientState, serverData: {} });
   if (url.includes('/api/codex/status')) return jsonResponse({ enabled: true, mode: 'local-research-packet', exportRoot: 'exports/codex', autoLaunch: false });
   if (url.includes('/api/codex/export')) return jsonResponse({ ok: true, generatedAt: '2026-07-29T04:05:06Z', task: '# Codex 开源项目研究任务\n\n只研究，不集成。\n\n读取 AGENTS.md、HANDOFF.md、docs/PROJECT_STATE.json、docs/HANDOFF_LOG.md。', folder: 'exports/codex/2026-07-29T04-05-06-demo-github-tool-1', files: ['exports/codex/2026-07-29T04-05-06-demo-github-tool-1/RESEARCH_TASK.md', 'exports/codex/2026-07-29T04-05-06-demo-github-tool-1/project-context.json'], autoLaunch: false, message: 'Codex研究包已生成，并可复制到Codex新任务中。当前版本不会自动启动Codex或消耗额度。' });
   if (url.includes('/api/insights/status')) return jsonResponse({ enabled: true, available: true, ollamaRunning: true, model: 'qwen3:4b', modelInstalled: true, message: 'Ollama已连接，模型qwen3:4b可用', store: { insightCount: 0 } });
@@ -132,6 +139,8 @@ def run_viewport(page, width: int, height: int, save_screenshot: bool = False) -
         page.click('#detailContent [data-analyze]')
         page.wait_for_function("document.getElementById('insightDialog').open && document.getElementById('insightContent').textContent.includes('NPC记忆')", timeout=15000)
         page.click('#closeInsightBottom')
+        page.click('#detailContent [data-trust]')
+        page.wait_for_function("document.querySelector('.trust-overview') && document.querySelector('.trust-overview').textContent.includes('中等风险信号')", timeout=15000)
         page.click('#detailContent [data-codex]')
         page.wait_for_function("document.querySelector('.codex-result.success') && window.__copiedText.includes('Codex 开源项目研究任务')", timeout=15000)
 
@@ -157,7 +166,11 @@ def run_viewport(page, width: int, height: int, save_screenshot: bool = False) -
       detailSources: document.querySelectorAll('.detail-source-card').length,
       detailText: document.getElementById('detailContent').textContent,
       codexResult: document.querySelector('.codex-result')?.textContent || '',
-      copiedText: window.__copiedText
+      copiedText: window.__copiedText,
+      trustText: document.querySelector('.trust-overview')?.textContent || '',
+      identityControls: document.querySelectorAll('#detailContent [data-set-primary], #detailContent [data-split-source], #detailContent [data-merge-identity]').length,
+      primaryBackground: document.querySelector('.detail-source-card.is-primary') ? getComputedStyle(document.querySelector('.detail-source-card.is-primary')).backgroundColor : '',
+      backupButtons: Boolean(document.getElementById('exportBackup') && document.getElementById('importBackup'))
     })''')
     result['errors'] = errors
     if save_screenshot:
@@ -189,6 +202,10 @@ def assert_result(result: dict, mobile: bool = False) -> None:
         assert '统一中文情报' in result['detailText'], result
         assert '研究包已写入本地' in result['codexResult'], result
         assert 'Codex 开源项目研究任务' in result['copiedText'], result
+        assert '中等风险信号' in result['trustText'], result
+        assert result['identityControls'] >= 3, result
+        assert result['backupButtons'], result
+        assert result['primaryBackground'] != 'rgb(99, 234, 255)', result
 
     gitee_urls = [url for url in result['requestedUrls'] if '/api/gitee/search' in url]
     modelscope_urls = [url for url in result['requestedUrls'] if 'modelscope.cn/openapi/v1/models' in url]

@@ -1,0 +1,46 @@
+{
+  "release": "v0.1.0",
+  "release_candidate": true,
+  "public_release_go": true,
+  "branch": "oss/phase-0-public-readiness",
+  "head": "",
+  "license": "MIT",
+  "repo_slug": "oss-reuse-radar",
+  "display_name": "OpenRadar",
+  "tests": {
+    "node": "30/30",
+    "windows_live_acceptance": "passed",
+    "secret_scan_current_tree": "passed",
+    "secret_scan_git_history": "passed",
+    "privacy_scan_git_history": "passed_with_user_decision",
+    "license_audit": "passed",
+    "readme_gate": "passed",
+    "ci_gate": "passed",
+    "community_gate": "passed_with_user_decision",
+    "screenshot_gate": "not_run"
+  },
+  "known_limitations": [
+    "Gitee remains fallback-only and is not counted as live or growth data",
+    "History growth requires natural time; missing baselines show as accumulating",
+    "Package metrics are ecosystem-specific and not directly cross-ranked",
+    "Gateway cache is memory-only and clears on server restart",
+    "Authenticated GitHub mode is optional and was not live-acceptance tested",
+    "Trust signals are public risk signals, not certification or legal conclusions",
+    "Upstream availability varies by network; proxy configuration may be needed",
+    "Early provenance history contains the user's local desktop path and is generalized in current docs",
+    "No real UI screenshots are committed yet"
+  ],
+  "required_user_decisions": [
+    "Approve repository owner and oss-reuse-radar slug",
+    "Approve public exposure of the early provenance desktop path or authorize a later history rewrite",
+    "Choose security contact: GitHub Private Vulnerability Reporting (recommended) or an approved public email",
+    "Approve the actual public launch"
+  ],
+  "forbidden_until_approved": [
+    "create_remote",
+    "push",
+    "tag",
+    "github_release",
+    "make_public"
+  ]
+}

@@ -36,6 +36,29 @@ The launcher deliberately keeps an error window visible if startup fails. For a 
 node server.mjs
 ```
 
+## Requirements
+
+- Node.js 20 or newer is the baseline; the release acceptance was run on
+  Node 24 on Windows.
+- Python is optional: it is only used for the mocked browser test, not for
+  running the product.
+- No paid API, account, or token is required for the base experience. An
+  optional `GITHUB_TOKEN` may be supplied to the server process only.
+- Optional local Ollama (`qwen3:4b`) for Chinese explanations; rule summaries
+  work without it.
+
+## Windows and proxy note
+
+The project does not hardcode a proxy address. If your network requires one,
+configure it through environment variables before starting the server:
+
+```text
+NODE_USE_ENV_PROXY=1
+HTTP_PROXY=<your proxy>
+HTTPS_PROXY=<your proxy>
+NO_PROXY=localhost,127.0.0.1,::1
+```
+
 ## Tests
 
 ```bash
@@ -51,10 +74,29 @@ Public endpoints can be rate-limited, unavailable, changed, or subject to terms 
 
 The current artifact still needs user-facing live acceptance for all upstream sources, public maintenance/adoption evidence, and natural-time history. The gateway's memory cache is cleared on server restart. See `docs/UPSTREAM_GATEWAY_DECISION.md`, `docs/PUBLIC_RUNTIME_RISK_REGISTER.md`, and `ROADMAP.md`.
 
+## Current beta limitations
+
+- Gitee is fallback-only external search and is not counted as live or growth data.
+- Real growth requires natural time; missing baselines show as "accumulating".
+- npm monthly, PyPI auxiliary, and crates cumulative/recent download signals
+  are not directly comparable.
+- The upstream gateway cache is memory-only and clears on restart; cached or
+  degraded results are explicitly not live data.
+- Authenticated GitHub is optional and not required; anonymous mode is the
+  verified base experience.
+- Trust signals are risk signals, not security certification, and a missing
+  result is not proof of safety.
+- Upstream availability varies by network and may require a proxy.
+- Real UI screenshots are pending capture before launch.
+
 ## Contributing and license
 
 Please read `CONTRIBUTING.md`, `SECURITY.md`, and `CODE_OF_CONDUCT.md` before opening an issue or pull request. The repository code is MIT-licensed as documented in `LICENSE`, subject to the source/data caveats in the ledger. That ledger is engineering documentation, not legal advice.
 
-The project is not yet a public repository and has no verified public adoption or maintenance history. Do not interpret the local OSS readiness score as an OpenAI score or as an application endorsement.
+The project is currently a local v0.1.0 release candidate and has no verified
+public adoption or maintenance history. Publishing still requires the user's
+explicit approval. Do not interpret the local OSS readiness score as an OpenAI
+score or as an application endorsement. The release-gate audit is recorded in
+`docs/PUBLIC_RELEASE_GATE.md`.
 
 For the existing Chinese product notes and API details, see `README.md`.

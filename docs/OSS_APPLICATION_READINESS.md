@@ -48,3 +48,16 @@ The score remains `50/100 — NO` and no adoption or public-maintenance points
 were added. The release gate and this heuristic measure different things: the
 gate covers live engineering evidence, while the heuristic still requires an
 approved public repository, real releases, and real users before re-scoring.
+
+## OSS-0R evidence
+
+The v0.1.0 release candidate audit completed on 2026-08-11: full-history
+secret/privacy scan passed (with one documented user decision for an early
+provenance path), MIT license completed, browser mock/CI made portable,
+README/quick-start/CI/community gates passed, and `PUBLIC_RELEASE_GO = true`
+pending user approval. See `docs/PUBLIC_RELEASE_GATE.md` and
+`docs/PUBLIC_RELEASE_MANIFEST.json`.
+
+The score remains `50/100 — NO`. No adoption or public-maintenance points
+were added: this heuristic cannot increase until the repository is actually
+public, `v0.1.0` is released, and real issues, PRs, and users accumulate.

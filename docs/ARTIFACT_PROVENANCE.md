@@ -8,8 +8,11 @@ recovered product version is Open Source Radar Phase 0.4-B.
 ## Verified artifact
 
 - Source artifact: `open-source-radar-phase-0.4-b.zip`
-- Original supplied path: `C:\Users\28293\Desktop\临时下载\水印图\open-source-radar-phase-0.4-b.zip`
-- Verified copy: `C:\Users\28293\Desktop\临时下载\水印图\open-source-radar-phase-0.4-b-VERIFIED.zip`
+- Original supplied path: user-supplied local download folder (the user's
+  Windows desktop download folder). The literal path containing the Windows
+  account name appears in early recovered-history commits of this file and is
+  intentionally generalized here for public release.
+- Verified copy: `open-source-radar-phase-0.4-b-VERIFIED.zip`
 - Size: 150,410 bytes
 - SHA-256: `4fcd03e483196bd48e3c47f4e8d7e53c9ee96c5d8b89fb75613b42a55341ce3d`
 - Result: exact match with the task-provided expected hash
@@ -20,7 +23,7 @@ recovered product version is Open Source Radar Phase 0.4-B.
 
 The supplied Bundle was also verified:
 
-- Bundle: `C:\Users\28293\Desktop\临时下载\水印图\open-source-radar-phase-0.4-b.bundle`
+- Bundle: `open-source-radar-phase-0.4-b.bundle`
 - SHA-256: `915f1c9184623e2284859c270f3db8b6a5d0e6ac57bf7104ffd01c2212597df3`
 - `git bundle verify`: passed; the bundle records a complete history
 - Recovered Phase 0.4-B handoff commit: `e60b3a0249e16c4aae3988eabaeccadf7ac4b4fc`
@@ -35,6 +38,20 @@ The branch `oss/phase-0-public-readiness` preserves the genuine recovered
 history. Historical phase documents and historical commit references remain
 provenance records; they are not recreated or backdated. The public-maintenance
 baseline starts from the recovered Phase 0.4-B commit on this branch.
+
+## Public release boundary
+
+The project began as ChatGPT-assisted local artifacts. Genuine recovered Git
+history is preserved, and formal public OSS maintenance begins with the public
+beta. No history was rewritten, no dates were backdated, and no synthetic
+release tag or fake contributor was added.
+
+One local provenance detail is preserved in early history: the original
+artifact path included the user's Windows account name and desktop download
+folder. This is a local file path, not a credential. Publishing the repository
+will expose that path in history; the current file generalizes it. The user
+must approve this history exposure (or authorize a later history rewrite)
+before launch.
 
 ## Limitations
 

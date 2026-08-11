@@ -19,9 +19,24 @@ risk, not a legal trademark conclusion.
 | Brand becomes `OSS Reuse Radar` | More descriptive and less collision-prone | Breaks existing UI wording and historical references | Keep as fallback |
 | Brand becomes `Open Source Reuse Radar` | Most explicit for global users | Long name; larger UI and migration cost | Keep as fallback |
 
+## Final release-gate output
+
+```text
+recommended_repo_slug: oss-reuse-radar
+recommended_display_name: OpenRadar
+rename_required_before_public: false
+```
+
+`oss-reuse-radar` communicates the repository purpose (discover and reuse OSS)
+and is not known to collide with an established project. This is a discovery
+preference, not a trademark or legal guarantee. The visible product name
+`OpenRadar` remains collision-prone in search and should be paired with the
+descriptive repository slug and a clear one-line description at launch.
+
 ## Decision
 
-Do not rename the visible brand or repository in this phase. If publication is
-approved later, use a descriptive repository slug such as `oss-reuse-radar`
-and make the relationship to the visible `OpenRadar` brand explicit. No domain
-was registered or changed, and no public repository was created.
+Do not rename the visible brand or the in-repository product name in this
+phase. If publication is approved later, use the descriptive repository slug
+`oss-reuse-radar` and make the relationship to the visible `OpenRadar` brand
+explicit. No domain was registered or changed, and no public repository was
+created.

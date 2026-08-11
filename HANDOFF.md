@@ -205,3 +205,44 @@ Phase 0.4-A.1已由用户在Windows真实环境验收：双击启动器、来源
   `docs/PROJECT_STATE.json`, `scripts/live-upstream-acceptance.mjs`,
   `RUN_LIVE_UPSTREAM_ACCEPTANCE.cmd`, `artifacts/live-upstream-acceptance.json`
   (ignored), `upstream-gateway.mjs`, `server.mjs`, `app.js`.
+
+## OSS-0R Public Beta Release Gate (2026-08-11)
+
+- Current phase/status: OSS-0R; v0.1.0 release candidate audit complete;
+  `PUBLIC_RELEASE_GO = true` pending explicit user approval.
+- Branch/HEAD: `oss/phase-0-public-readiness` / `6a3ca65` before the final
+  release-candidate docs commit; the docs commit is recorded in the
+  post-commit evidence snapshot. Prior commits: OSS-0Q.1 freeze `857f8af`,
+  MIT license fix `c4e3812`, browser mock/CI fix `6a3ca65`. No tag, remote,
+  push, merge, release, or public repository exists.
+- Freeze: OSS-0Q.1 final evidence committed as `docs: freeze OSS-0Q1
+  release-gate handoff`; working tree was clean before OSS-0R started.
+- Gate results: full-history secret scan passed (36 commits, only a fake
+  injected test token); privacy scan passed with one user decision (early
+  provenance desktop path, now generalized); license completed to standard
+  MIT; browser mock/CI made portable (Node 24, Playwright/Chromium install,
+  graceful skip); naming recommends `oss-reuse-radar`; README/quick-start/CI/
+  community gates passed; screenshots pending.
+- Release manifest: `docs/PUBLIC_RELEASE_MANIFEST.json` with
+  `public_release_go: true`, `release_candidate: true`, `repo_slug:
+  oss-reuse-radar`.
+- Required user decisions: repository owner/slug approval, provenance-history
+  exposure approval or later rewrite, security contact choice (GitHub Private
+  Vulnerability Reporting recommended), and final launch approval.
+- Tests: Node 30/30; JS/MJS syntax passed; Python syntax passed; browser mock
+  skipped cleanly locally (playwright missing; CI installs it); JSON parse
+  passed; `git diff --check` passed; real Windows live acceptance from
+  2026-08-11 reused (no runtime code changed).
+- Workspace/Git: final release-candidate docs commit
+  `docs: prepare v0.1.0 public release candidate`; the state/handoff/log
+  evidence snapshot is intentionally dirty for audit. No staged files beyond
+  the evidence trio, no tag, push, merge, remote, or public repo.
+- Unique next task: **User-approved GitHub Public Launch — create
+  `oss-reuse-radar`, push genuine history, establish `main`, tag `v0.1.0`,
+  publish Release, enable security/community settings, verify public CI**
+  (must not be executed without user approval).
+- Key files: `docs/PUBLIC_RELEASE_GATE.md`,
+  `docs/PUBLIC_RELEASE_MANIFEST.json`, `docs/GITHUB_PUBLIC_REPOSITORY_PLAN.md`,
+  `docs/RELEASE_NOTES_v0.1.0.md`, `docs/PUBLIC_NAMING_DECISION.md`,
+  `docs/ARTIFACT_PROVENANCE.md`, `LICENSE`, `.github/workflows/ci.yml`,
+  `tests/browser_mock_test.py`, `docs/PROJECT_STATE.json`.

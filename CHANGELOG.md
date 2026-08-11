@@ -2,6 +2,22 @@
 
 This file records truthful project milestones. It is not a list of public releases.
 
+## Unreleased — OSS-0R v0.1.0 release candidate
+
+- Windows live upstream acceptance passed on a real user network: GitHub,
+  Hugging Face, GitLab, ModelScope, npm, PyPI, and crates.io live; Codeberg
+  legal-empty; Gitee fallback-only; GitHub anonymous and live cache re-hit
+  verified.
+- Full-history secret and privacy audit performed; no real credential found;
+  the user's local artifact path in early provenance history is documented as
+  a user decision.
+- Completed the MIT license text and made the browser mock/CI portable
+  (Node 24, Playwright/Chromium install, graceful skip without Playwright).
+- Created the public release gate, release notes, release manifest, and
+  GitHub repository plan as local release-candidate artifacts.
+- `PUBLIC_RELEASE_GO = true`, pending explicit user approval. No public
+  repository, push, tag, or release was created.
+
 ## Unreleased — OSS-0P public-readiness foundation
 
 - Verified the supplied Phase 0.4-B ZIP and recovered Bundle.

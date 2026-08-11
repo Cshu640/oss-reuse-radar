@@ -323,3 +323,10 @@ npx --yes serve . -l 8080
 - PyPI查询可能只召回精确包名或开放元数据可搜索结果，不能宣称覆盖PyPI全站。
 - 项目对比综合分是启发式规则，缺少Trust数据时使用中性分；不是安全认证、性能测试或法律意见。
 - 软件包与代码仓库只在共享规范仓库URL等强信号下自动合并，不能仅凭名称相同合并。
+
+## Public OSS entry
+
+The English public-maintenance entry is available at `README.en.md`. This
+artifact is still local and has no verified public adoption or maintenance
+history. Before any public release, read `docs/UPSTREAM_AUDIT.md`,
+`docs/SOURCE_LEDGER.json`, and `docs/PUBLIC_RUNTIME_RISK_REGISTER.md`.

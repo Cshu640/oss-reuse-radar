@@ -70,3 +70,11 @@
 - 缺少Trust报告时必须使用中性值并明确提示；“审计缺失项目”必须串行执行，禁止并发轰炸免费接口。
 - 对比清单键`openradar:compare:v1`必须进入完整备份；版本升级不得静默丢失。
 - 软件包生态真实Windows召回未验收前，不得写成npm、PyPI、crates.io全部真实可用。
+
+## OSS-0P 公共维护规则
+
+未来 Agent 每次开始工作前必须读取 `AGENTS.md`、`HANDOFF.md`、`docs/PROJECT_STATE.json` 和 `docs/HANDOFF_LOG.md` 最新记录，并核对真实 Git branch、HEAD、working tree、staging、tag、push、merge 状态。
+
+未来新增子系统前必须先审计可复用的 OSS 项目、SDK、API 和数据来源，记录许可证与采用/拒绝理由；不得把代码完成等同于功能可用或用户验收，不得把本地模拟写成真实上游验收。
+
+每次结束必须记录实际运行的测试、未验证项、阻塞、已知风险、工作区/暂存/提交/标签/推送/合并状态、唯一下一项任务和关键文件位置。不得编造 stars、用户、issue、PR、发布或维护活动，不得覆盖 `docs/HANDOFF_LOG.md` 历史，只能追加。

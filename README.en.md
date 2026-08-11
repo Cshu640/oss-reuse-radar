@@ -1,0 +1,59 @@
+# Open Source Radar
+
+> Discover, evaluate, and reuse open-source projects instead of rebuilding from scratch.
+
+Open Source Radar is a local-first discovery and evaluation tool for open-source projects, models, and software packages. It combines goal-oriented search, local history, conservative cross-platform identity matching, trust signals, project comparison, and Codex research-packet export in one runnable workspace.
+
+It is not another GitHub Trending clone. A ranking is only one input. The product keeps source records separate, shows when growth is backed by local history, distinguishes facts from rules and AI explanations, and helps a person decide whether a project is worth reusing.
+
+## Current capabilities
+
+- Sources: GitHub, Hugging Face, GitLab, Codeberg, ModelScope, npm, PyPI, and crates.io.
+- Gitee remains a degraded external-search path and is not counted as a real-time source when its official path is unavailable.
+- Local history for real 24-hour, 7-day, and 30-day changes after enough time has elapsed. A missing baseline is shown as accumulating rather than invented.
+- Conservative identity merging, manual merge/split/primary-source corrections, and preservation of original source IDs and metrics.
+- On-demand OpenSSF Scorecard, deps.dev, and OSV signals. These are public risk signals, not security certification or a guarantee of no vulnerabilities.
+- Two-to-five project comparison using local rule-based dimensions, not a performance benchmark or legal conclusion.
+- Optional local Ollama explanations using `qwen3:4b`; rule summaries remain available when Ollama is unavailable.
+- Complete local backup/restore, including favorites, comparison state, history, insights, trust reports, identity corrections, and Codex research packets.
+
+## Local-first and cost model
+
+The first version is designed around zero paid API cost. Run `node server.mjs` so local persistence, package adapters, Gitee fallback behavior, trust checks, and Ollama integration are available. The app does not ship a GitHub token or any other service secret.
+
+Runtime data stays local and is ignored by Git: `data/*.json` and generated files under `exports/codex/`. The favorites compatibility key is `openradar:favorites:v1`; comparison state uses `openradar:compare:v1`.
+
+## Quick start on Windows
+
+1. Install Node.js and Python.
+2. Double-click `START-OPENRADAR.bat` or `start-openradar.cmd`.
+3. Keep the terminal open and visit `http://localhost:8080`.
+
+The launcher deliberately keeps an error window visible if startup fails. For a terminal launch, run:
+
+```bash
+node server.mjs
+```
+
+## Tests
+
+```bash
+node --test tests/*.mjs
+python tests/browser_mock_test.py
+```
+
+CI runs these tests plus JavaScript syntax checks, Python compilation, and JSON parsing. CI does not call live third-party APIs.
+
+## Upstream and data caveats
+
+Public endpoints can be rate-limited, unavailable, changed, or subject to terms that differ from the repository license. npm monthly downloads, PyPI auxiliary download signals, and crates.io cumulative/recent downloads are not directly comparable. The source and license review is recorded in `docs/UPSTREAM_AUDIT.md` and `docs/SOURCE_LEDGER.json`.
+
+The current artifact still needs user-facing live acceptance for all upstream sources, stronger public-beta rate-limit handling, and natural-time history. See `docs/PUBLIC_RUNTIME_RISK_REGISTER.md` and `ROADMAP.md`.
+
+## Contributing and license
+
+Please read `CONTRIBUTING.md`, `SECURITY.md`, and `CODE_OF_CONDUCT.md` before opening an issue or pull request. The repository code is MIT-licensed as documented in `LICENSE`, subject to the source/data caveats in the ledger. That ledger is engineering documentation, not legal advice.
+
+The project is not yet a public repository and has no verified public adoption or maintenance history. Do not interpret the local OSS readiness score as an OpenAI score or as an application endorsement.
+
+For the existing Chinese product notes and API details, see `README.md`.

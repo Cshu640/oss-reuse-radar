@@ -103,3 +103,14 @@ Phase 0.4-A.1已由用户在Windows真实环境验收：双击启动器、来源
 - `HANDOFF.md`
 - `docs/PROJECT_STATE.json`
 - `docs/HANDOFF_LOG.md`
+
+## OSS-0P takeover status (2026-08-11)
+
+- Current phase: OSS-0P — verified artifact takeover and public OSS foundation audit.
+- Artifact: supplied ZIP SHA-256 exactly verified as `4fcd03e483196bd48e3c47f4e8d7e53c9ee96c5d8b89fb75613b42a55341ce3d`; supplied Bundle SHA-256 exactly verified as `915f1c9184623e2284859c270f3db8b6a5d0e6ac57bf7104ffd01c2212597df3`.
+- Git: the supplied Bundle verified and its genuine history was recovered. Current maintenance branch is `oss/phase-0-public-readiness`, based on `e60b3a0`; the local baseline commit is `0f8d38c`.
+- Completed in this task so far: artifact provenance; source/license ledger and audit; naming decision; runtime risk register; README English entry; contributing/security/conduct/changelog/roadmap files; issue and PR templates; secret-free CI workflow; AGENTS OSS-0P rules.
+- Not completed: final Windows/live-source result recording, final readiness-state JSON, final handoff append, and public-beta rate-limit implementation.
+- Blockers: none for local documentation work. Public release remains blocked by live upstream acceptance, rate-limit hardening, and lack of public maintenance/adoption evidence.
+- Forbidden: no public repository, remote, push, release tag, release, PR, merge, MCP, cloud collector, payment, accounts, or new platform was created.
+- Next single task after this audit: implement and verify public-beta rate-limit/cache/degraded-mode hardening for direct upstream calls.

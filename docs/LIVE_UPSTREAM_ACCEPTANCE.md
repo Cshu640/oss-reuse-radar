@@ -1,104 +1,108 @@
 # OSS-0Q.1 Windows Live Upstream Acceptance
 
-Date: 2026-08-11 16:19 Asia/Shanghai. This is an observed engineering record,
+Date: 2026-08-11 18:06 Asia/Shanghai. This is an observed engineering record,
 not a claim that every provider is available from every Windows network.
 
 ## Environment and method
 
 - OS/runtime: Windows `win32-x64`, Node `v24.18.0`, Asia/Shanghai.
+- Execution: the user ran `RUN_LIVE_UPSTREAM_ACCEPTANCE.cmd` from an ordinary
+  Windows PowerShell with `NODE_USE_ENV_PROXY=1`,
+  `HTTP_PROXY`/`HTTPS_PROXY=http://127.0.0.1:7897`, and
+  `NO_PROXY=localhost,127.0.0.1,::1`. The harness itself does not serialize
+  environment variables; this description comes from the user's run report.
 - Method: the repeatable native-Node harness started `node server.mjs` on an
-  ephemeral loopback port with `OPENRADAR_AUTO_COLLECT=0`, then queried only
-  the local product routes. The child server was stopped by the harness; no
-  other Node process was touched.
+  ephemeral loopback port (`55858`) with `OPENRADAR_AUTO_COLLECT=0`, then
+  queried only the local product routes. The child server was stopped by the
+  harness; no other Node process was touched.
 - Chain under test: local server -> `/api/upstream/*` or
   `/api/packages/*` -> server gateway -> provider.
-- GitHub was forced anonymous for this run. An authenticated check was not
-  performed and no token was printed, stored, or sent to the browser.
+- GitHub was forced anonymous for this run (`authMode=anonymous`,
+  `authenticated_mode_not_tested`). No token was printed, stored, or sent to
+  the browser.
 - Sanitized machine evidence: `artifacts/live-upstream-acceptance.json`
   (ignored local runtime evidence; it contains no token, Authorization header,
   cookie, raw environment value, or private path).
 
 ## Windows live provider matrix
 
-The local routes returned HTTP 200 for project envelopes even when the gateway
-reported a network failure. That is the intended sanitized degraded contract;
-the `httpStatus` below is therefore the local route status, not a fabricated
-upstream status.
+The local routes returned HTTP 200 for project envelopes; `httpStatus` is the
+local route status. Each row reflects a real provider response through the
+product gateway.
 
-| Provider/query | Local status | Auth | Count | Cache | Gateway state | Category |
-| --- | ---: | --- | ---: | --- | --- | --- |
-| GitHub / `http client` | 200 | anonymous | 0 | miss | network-error | `FAIL_NETWORK` |
-| Hugging Face / `http client` | 200 | anonymous | 0 | miss | network-error | `FAIL_NETWORK` |
-| GitLab / `http client` | 200 | anonymous | 0 | miss | network-error | `FAIL_NETWORK` |
-| Codeberg / `http client` | 200 | anonymous | 0 | miss | network-error | `FAIL_NETWORK` |
-| ModelScope / `http client` | 200 | anonymous | 0 | miss | network-error | `FAIL_NETWORK` |
+| Provider/query | Local status | Auth | Count | Cache | Category |
+| --- | ---: | --- | ---: | --- | --- |
+| GitHub / `http client` | 200 | anonymous | 3 | miss | `PASS_LIVE` |
+| Hugging Face / `http client` | 200 | anonymous | 3 | miss | `PASS_LIVE` |
+| GitLab / `http client` | 200 | anonymous | 3 | miss | `PASS_LIVE` |
+| Codeberg / `http client` | 200 | anonymous | 0 | miss | `PASS_LIVE_EMPTY` |
+| ModelScope / `http client` | 200 | anonymous | 1 | miss | `PASS_LIVE` |
 
-This run did not observe a real project response or GitHub rate-limit headers;
-all GitHub limit fields remained null because the request could not reach the
-provider. It therefore does not prove anonymous quota availability or failure.
+GitHub anonymous live rate-limit headers were observed through the local
+route: `resource=search`, `limit=10`, `remaining=5`, `used=5`,
+`reset=2026-08-11T10:06:38Z`, `retry-after` absent. This is real anonymous
+quota evidence for a public beta that does not require a token. Authenticated
+GitHub was not tested and is a documented non-blocking gap.
+
+Codeberg returned a legal empty result (`PASS_LIVE_EMPTY`) with a healthy
+contract and parser, not a parser failure.
 
 ## Package ecosystem probes
 
-| Ecosystem/query | Local status | Count/parse | Category | Notes |
+| Ecosystem/query | Local status | Count/parse | Usage signal | Category |
 | --- | ---: | --- | --- | --- |
-| npm / `axios` | 502 | no projects array | `FAIL_UPSTREAM_HTTP` | registry-backed package route failed upstream |
-| PyPI / `requests` | 200 | 0 / valid projects array | `FAIL_NETWORK` | all related gateway providers were degraded; not treated as a valid empty package result |
-| crates.io / `serde` | 502 | no projects array | `FAIL_UPSTREAM_HTTP` | registry-backed package route failed upstream |
+| npm / `axios` | 200 | 3 / projects array | downloads present | `PASS_LIVE` |
+| PyPI / `requests` | 200 | 1 / projects array | downloads present | `PASS_LIVE` |
+| crates.io / `serde` | 200 | 3 / projects array | downloads + recentDownloads | `PASS_LIVE` |
 
-PyPI download values, when available in a future live run, must remain auxiliary
-adoption signals rather than official precise download totals. npm monthly,
-PyPI auxiliary, and crates cumulative/recent signals are not cross-ranked as a
-single raw growth number.
+PyPI download values remain auxiliary adoption signals, not official precise
+download totals. npm monthly, PyPI auxiliary, and crates cumulative/recent
+signals are not cross-ranked as a single raw growth number.
 
-## Gitee and cache re-hit
+## Gitee
 
 - Gitee returned `gitee-external-search`, `degraded=true`, and zero projects;
   this is `DEGRADED_FALLBACK` and is not counted as a live platform or growth
-  result.
-- GitHub, Hugging Face, and npm were each requested twice through the same
-  local route. Because the first provider calls were network failures, both
-  attempts remained `miss`; no live cache re-hit was claimed. Category:
-  `NOT_TESTED_ENVIRONMENT_BLOCKED`.
-- The in-memory cache behavior itself remains covered by the injected gateway
-  tests; restart invalidation remains intentional.
+  result. The fallback-only contract is intact.
+
+## Cache re-hit (live local-server behavior)
+
+Each request was made twice through the same local route; both attempts
+returned `fresh` with identical data (`sameData=true`).
+
+| Request | First | Second | Verified |
+| --- | --- | --- | --- |
+| GitHub / `http client` | fresh, 4 ms | fresh, 11 ms | true |
+| Hugging Face / `http client` | fresh, 15 ms | fresh, 15 ms | true |
+| npm / `axios` | fresh, 15 ms | fresh, 3 ms (faster) | true |
+
+Live cache re-hit is therefore verified for GitHub, Hugging Face, and npm.
+Latency reduction is observation only, not a hard threshold. The in-memory
+cache still clears on restart, which is intentional and documented.
 
 ## Browser smoke
 
-The in-app browser used the same local server and completed these checks:
-
-- Home/radar rendered with `GitHub匿名` and explicit `上游不可用`/`外部搜索`
-  badges; no fake loading result was presented after the requests settled.
-- The `http client` search rendered zero results with per-provider degraded
-  states, npm/crates HTTP 502 notices, and direct external search links.
-- A seed project detail opened; the detail page showed source facts, rule
-  summary, license caution, trust wording, and Codex research boundaries.
-- Favorite save and reload persistence passed (`openradar:favorites:v1`).
-- Package page rendered; `axios` search showed npm/crates unavailable without
-  hiding the failure.
-- Two seed projects entered comparison; the result was labeled a rule
-  judgment, not a benchmark, certification, or legal conclusion.
-- Codex research packet generation wrote a local packet and explicitly stated
-  that Codex was not auto-started and no quota was consumed.
-- Browser console inspection returned zero warning/error entries from the tab
-  API. This browser backend did not expose a full network panel; no direct
-  provider success was inferred from that limitation. Static browser/server
-  direct-upstream scans remain part of regression below.
+The Node acceptance harness does not drive a browser
+(`not-run-by-node-harness`). The earlier OSS-0Q.1 environment-blocked run
+covered the local degraded-path browser smoke (home, search, badges, detail,
+favorites, package page, comparison, Codex export, zero console errors), and
+that record remains in `docs/HANDOFF_LOG.md`. A new browser live-smoke on this
+passing network was not part of this acceptance run and is not claimed.
 
 ## Failures, blockers, and release judgment
 
-- The current Codex Shell and in-app browser both could start the local server,
-  but their outbound provider calls were unavailable. The harness is therefore
-  a real, repeatable Windows acceptance path, not a simulated PASS; rerun
-  `RUN_LIVE_UPSTREAM_ACCEPTANCE.cmd` from an ordinary Windows Terminal on a
-  network that can reach the providers.
-- No product code fix was justified by this run: the local routes preserved the
-  sanitized degraded contract and the UI surfaced the provider-local failures.
-- Public-beta gate: **`PUBLIC_BETA_RELEASE_GATE_READY = false`**. The required
-  anonymous GitHub live response and the mandatory multi-provider/package live
-  evidence were not observed from this environment. This is an acceptance
-  blocker, not evidence that all providers are down globally.
-- Readiness score stays `50/100 — NO`; no adoption or public-maintenance points
-  were added.
+- No provider failed for a product reason in this run. Gitee
+  `DEGRADED_FALLBACK` is the accepted contract; Codeberg zero is a legal empty
+  result; authenticated GitHub and standalone Python Playwright were not run
+  and are documented non-blocking gaps.
+- No new release blocker was observed. The required anonymous GitHub live
+  response and multi-provider/package live evidence are now recorded from a
+  real Windows network.
+- Public-beta gate: **`PUBLIC_BETA_RELEASE_GATE_READY = true`**.
+- Readiness score stays `50/100 — NO`; no adoption or public-maintenance
+  points were added. The score and the release gate are separate judgments:
+  the gate covers live engineering evidence, while the 100-point heuristic
+  still requires public maintenance and adoption evidence before re-scoring.
 
 ## Reproduction
 

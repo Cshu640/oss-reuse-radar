@@ -1,8 +1,8 @@
 {
   "phase": "OSS-0Q.1",
-  "status": "windows_live_upstream_acceptance_incomplete_environment_blocked",
+  "status": "windows_live_upstream_acceptance_passed_release_gate_ready",
   "branch": "oss/phase-0-public-readiness",
-  "head": "a30a06f",
+  "head": "c3eea98",
   "working_tree": "dirty",
   "staged": false,
   "committed": false,
@@ -37,7 +37,7 @@
     "in_flight_dedupe": true,
     "evictable": true,
     "tokens_or_auth_headers_stored": false,
-    "validation": "20 gateway tests plus server cache-hit route test passed"
+    "validation": "20 gateway tests plus server cache-hit route test passed; live re-hit verified on Windows for GitHub, Hugging Face, and npm"
   },
   "rate_limit": {
     "github_headers": ["x-ratelimit-limit", "x-ratelimit-remaining", "x-ratelimit-used", "x-ratelimit-reset", "x-ratelimit-resource", "retry-after"],
@@ -48,7 +48,7 @@
     "secondary_retry_after": true,
     "bounded_retry_max_retries": 2,
     "ordinary_4xx_retry": false,
-    "validation": "fake clock/sleeper tests passed; live provider quota acceptance remains open"
+    "validation": "fake clock/sleeper tests passed; live anonymous GitHub headers observed on Windows (resource=search, limit=10, remaining=5, used=5, reset observed)"
   },
   "secret_boundary": {
     "github_token_source": "server_process_environment_only",
@@ -59,6 +59,29 @@
     "static_secret_scan": "passed",
     "env_example": ".env.example contains only an empty GITHUB_TOKEN placeholder"
   },
+  "live_upstream_acceptance": {
+    "status": "passed_real_windows_network",
+    "previous_oss_0p_evidence_preserved": true,
+    "environment": "Windows win32-x64; Node 24.18.0; Asia/Shanghai; ordinary user Windows PowerShell with NODE_USE_ENV_PROXY=1, HTTP_PROXY/HTTPS_PROXY=http://127.0.0.1:7897, NO_PROXY=localhost,127.0.0.1,::1",
+    "harness": "scripts/live-upstream-acceptance.mjs via RUN_LIVE_UPSTREAM_ACCEPTANCE.cmd",
+    "local_chain_verified": true,
+    "github": "PASS_LIVE; anonymous; 3 results; resource=search limit=10 remaining=5 used=5 reset=2026-08-11T10:06:38Z",
+    "huggingface": "PASS_LIVE; 3 results",
+    "gitlab": "PASS_LIVE; 3 results",
+    "codeberg": "PASS_LIVE_EMPTY; 0 results",
+    "modelscope": "PASS_LIVE; 1 result",
+    "npm": "PASS_LIVE; axios 3 results; downloads usage signal",
+    "pypi": "PASS_LIVE; requests 1 result; downloads auxiliary signal",
+    "crates": "PASS_LIVE; serde 3 results; downloads + recentDownloads",
+    "gitee": "DEGRADED_FALLBACK; gitee-external-search; 0 projects; not counted as live/growth",
+    "pypistats": "status snapshot healthy (degraded=false) via package dependency path; no primary-route payload recorded",
+    "ecosystems": "status snapshot healthy (remaining 4998/5000); no primary-route payload recorded",
+    "cache_live_rehit_verified": true,
+    "github_anonymous_verified": true,
+    "github_authenticated_verified": false,
+    "browser_live_smoke": "not_run_this_acceptance; prior degraded-path browser smoke recorded"
+  },
+  "public_beta_release_gate_ready": true,
   "completed": [
     "OSS-0P handoff frozen in a dedicated documentation commit",
     "Open Source Scout official documentation/license review recorded",
@@ -68,78 +91,53 @@
     "npm, PyPI, crates.io, pypistats, and ecosyste.ms package calls use gateway in the real server entry path",
     "Gitee fallback-only contract unified without counting external search as live data",
     "UI shows anonymous/authenticated GitHub mode and live/cache/stale/degraded source badges",
-    "Public runtime risk register, source ledger, upstream audit, gateway decision, README, and AGENTS rules updated",
-    "OSS-0Q feature commit created without push, tag, merge, remote, release, or public repository",
     "Repeatable Node-native Windows live acceptance harness and ASCII CRLF CMD launcher committed",
-    "Current Windows/Codex shell acceptance recorded through the real local server-to-gateway chain",
-    "In-app browser smoke covered degraded badges, http client search, detail, favorite reload, package page, comparison, and Codex export"
+    "OSS-0Q.1 real Windows live acceptance passed: GitHub/Hugging Face/GitLab/ModelScope PASS_LIVE, Codeberg PASS_LIVE_EMPTY, npm/PyPI/crates PASS_LIVE, Gitee DEGRADED_FALLBACK",
+    "GitHub anonymous mode verified with observed live search rate-limit headers",
+    "Live cache re-hit verified for GitHub, Hugging Face, and npm",
+    "PUBLIC_BETA_RELEASE_GATE_READY set to true; next task is Public Beta Release Gate",
+    "Documentation commit created without push, tag, merge, remote, release, or public repository"
   ],
   "not_completed": [
-    "Full Windows live upstream acceptance for every provider on a network with outbound provider access",
+    "Authenticated GitHub mode live verification (documented non-blocking; no token present in the run)",
+    "New browser live smoke on the passing network (this acceptance run was the Node harness)",
     "Standalone tests/browser_mock_test.py because bundled Python lacks playwright",
-    "Natural-time growth and public maintenance/adoption evidence",
-    "Persistent disk cache, intentionally not selected for this phase"
+    "Natural-time growth and public maintenance/adoption evidence (required before application-ready re-scoring and any actual public release)"
   ],
-  "blocked_by": [
-    "Current Codex Shell and in-app browser outbound upstream access is restricted; rerun the committed harness from an ordinary Windows Terminal",
-    "Available bundled Python runtime lacks playwright",
-    "Public maintenance/adoption evidence requires a future approved public repository and external users"
-  ],
+  "blocked_by": [],
   "tests": [
     "node v24.18.0 node --test tests/*.mjs: 30 passed, 0 failed",
     "upstream_gateway_test.mjs: 20 tests passed",
     "JavaScript/MJS syntax checks: passed",
-    "JSON parse: manifest.webmanifest, docs/PROJECT_STATE.json, docs/SOURCE_LEDGER.json passed",
+    "JSON parse: docs/PROJECT_STATE.json and artifacts/live-upstream-acceptance.json passed",
     "git diff --check: passed",
-    "In-process local HTTP server smoke: health, homepage, upstream search, and Gitee contract all HTTP 200",
-    "Standalone Python Playwright browser mock: not run; dependency missing",
-    "Node-native live acceptance harness: server started/stopped safely; five project providers observed FAIL_NETWORK; npm/crates observed FAIL_UPSTREAM_HTTP; PyPI observed empty-after-degraded FAIL_NETWORK; Gitee DEGRADED_FALLBACK",
-    "Live cache re-hit: attempted GitHub, Hugging Face, npm twice each; no live hit verified because provider calls were unavailable",
-    "In-app browser smoke: degraded UI, http client search, detail, favorite reload, package error, comparison rule judgment, Codex export passed; tab console warnings/errors 0"
+    "Node-native live acceptance harness on real Windows network: GitHub/Hugging Face/GitLab/ModelScope PASS_LIVE, Codeberg PASS_LIVE_EMPTY, npm/PyPI/crates PASS_LIVE, Gitee DEGRADED_FALLBACK; server started/stopped safely",
+    "Live cache re-hit: GitHub, Hugging Face, and npm verified (fresh/fresh, sameData=true; npm second hit faster)",
+    "GitHub anonymous live rate-limit headers observed: resource=search limit=10 remaining=5 used=5 reset=2026-08-11T10:06:38Z",
+    "Secret scan: sanitized artifact contains no token, Authorization header, cookie, raw environment value, or private path",
+    "Standalone Python Playwright browser mock: not run; dependency missing"
   ],
-  "live_upstream_acceptance": {
-    "status": "incomplete_environment_blocked",
-    "previous_oss_0p_evidence_preserved": true,
-    "environment": "Windows win32-x64; Node 24.18.0; Asia/Shanghai",
-    "harness": "scripts/live-upstream-acceptance.mjs via RUN_LIVE_UPSTREAM_ACCEPTANCE.cmd",
-    "local_chain_verified": true,
-    "github": "FAIL_NETWORK; anonymous mode verified; no live rate-limit headers observed",
-    "huggingface": "FAIL_NETWORK",
-    "gitlab": "FAIL_NETWORK",
-    "codeberg": "FAIL_NETWORK",
-    "modelscope": "FAIL_NETWORK in current run; historical Windows evidence is preserved but not substituted",
-    "npm": "FAIL_UPSTREAM_HTTP",
-    "pypi": "FAIL_NETWORK; empty result after all related gateway providers degraded",
-    "crates": "FAIL_UPSTREAM_HTTP",
-    "gitee": "DEGRADED_FALLBACK; external-search only",
-    "pypistats": "FAIL_NETWORK via package dependency path",
-    "ecosystems": "FAIL_NETWORK via package dependency path",
-    "cache_live_rehit_verified": false,
-    "github_anonymous_verified": true,
-    "github_authenticated_verified": false,
-    "browser_live_smoke": "passed_local_degraded_path; external live provider payload not observed"
-  },
   "public_runtime_risk_changes": {
     "browser_direct_calls": "mitigated_for_normal_path",
-    "github_rate_limit": "partially_mitigated; live quota unverified",
-    "package_reliability": "partially_mitigated; current network blocked",
-    "cors_service_instability": "partially_mitigated; browser degraded path verified",
-    "gitee_fallback_ambiguity": "mitigated",
-    "public_governance_adoption": "open"
+    "github_rate_limit": "mitigated; anonymous live headers and reset observed on Windows",
+    "package_reliability": "mitigated; npm/PyPI/crates live PASS on Windows",
+    "cors_service_instability": "mitigated; live project/package responses verified",
+    "gitee_fallback_ambiguity": "mitigated; observed DEGRADED_FALLBACK",
+    "public_governance_adoption": "open; blocks re-scoring, not the release gate"
   },
   "oss_application_readiness_score": 50,
   "oss_application_readiness": "NO",
-  "score_change_policy": "no adoption or public maintenance points added",
+  "score_change_policy": "no adoption or public-maintenance points added; engineering live-evidence points already reflected in the score",
   "known_issues": [
-    "Cached and stale responses are not live data and memory cache is cleared on restart",
-    "Live provider availability and rate-limit headers vary by network and account",
-    "Package metrics remain ecosystem-specific and are not directly cross-ranked",
-    "Gitee remains fallback-only",
-    "Trust signals remain public risk signals, not certification",
-    "No public repository, release, issue, PR, or adoption evidence exists",
-    "Browser network panel was not exposed by the automation backend; no live success was inferred from that limitation"
+    "Gitee remains fallback-only and is not counted as live/growth",
+    "Package metrics remain ecosystem-specific and are not directly cross-ranked; PyPI downloads are auxiliary signals",
+    "Authenticated GitHub mode was not tested (non-blocking; anonymous base experience verified)",
+    "Memory cache clears on restart (intentional)",
+    "Browser live smoke was not part of the Node acceptance run; prior degraded-path browser smoke remains recorded",
+    "No public repository, release, issue, PR, or adoption evidence exists; actual publishing still requires user approval",
+    "Readiness score unchanged at 50/100 NO; no adoption or public-maintenance points added"
   ],
-  "next_task": "Rerun RUN_LIVE_UPSTREAM_ACCEPTANCE.cmd from an ordinary Windows Terminal with outbound provider access and record the observed matrix.",
+  "next_task": "Public Beta Release Gate",
   "key_files": [
     "upstream-gateway.mjs",
     "upstream-cache-store.mjs",
@@ -154,6 +152,7 @@
     "docs/SOURCE_LEDGER.json",
     "docs/PUBLIC_RUNTIME_RISK_REGISTER.md",
     "docs/LIVE_UPSTREAM_ACCEPTANCE.md",
+    "docs/OSS_APPLICATION_READINESS.md",
     "scripts/live-upstream-acceptance.mjs",
     "RUN_LIVE_UPSTREAM_ACCEPTANCE.cmd",
     "HANDOFF.md",

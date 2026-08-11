@@ -1,8 +1,8 @@
 {
-  "phase": "OSS-0Q",
-  "status": "public_beta_upstream_hardening_in_progress",
+  "phase": "OSS-0Q.1",
+  "status": "windows_live_upstream_acceptance_incomplete_environment_blocked",
   "branch": "oss/phase-0-public-readiness",
-  "head": "ec88f17",
+  "head": "a30a06f",
   "working_tree": "dirty",
   "staged": false,
   "committed": false,
@@ -69,16 +69,19 @@
     "Gitee fallback-only contract unified without counting external search as live data",
     "UI shows anonymous/authenticated GitHub mode and live/cache/stale/degraded source badges",
     "Public runtime risk register, source ledger, upstream audit, gateway decision, README, and AGENTS rules updated",
-    "OSS-0Q feature commit created without push, tag, merge, remote, release, or public repository"
+    "OSS-0Q feature commit created without push, tag, merge, remote, release, or public repository",
+    "Repeatable Node-native Windows live acceptance harness and ASCII CRLF CMD launcher committed",
+    "Current Windows/Codex shell acceptance recorded through the real local server-to-gateway chain",
+    "In-app browser smoke covered degraded badges, http client search, detail, favorite reload, package page, comparison, and Codex export"
   ],
   "not_completed": [
-    "Full Windows live upstream acceptance for every provider",
+    "Full Windows live upstream acceptance for every provider on a network with outbound provider access",
     "Standalone tests/browser_mock_test.py because bundled Python lacks playwright",
     "Natural-time growth and public maintenance/adoption evidence",
     "Persistent disk cache, intentionally not selected for this phase"
   ],
   "blocked_by": [
-    "Shell outbound upstream access is restricted in this execution environment",
+    "Current Codex Shell and in-app browser outbound upstream access is restricted; rerun the committed harness from an ordinary Windows Terminal",
     "Available bundled Python runtime lacks playwright",
     "Public maintenance/adoption evidence requires a future approved public repository and external users"
   ],
@@ -89,20 +92,38 @@
     "JSON parse: manifest.webmanifest, docs/PROJECT_STATE.json, docs/SOURCE_LEDGER.json passed",
     "git diff --check: passed",
     "In-process local HTTP server smoke: health, homepage, upstream search, and Gitee contract all HTTP 200",
-    "Standalone Python Playwright browser mock: not run; dependency missing"
+    "Standalone Python Playwright browser mock: not run; dependency missing",
+    "Node-native live acceptance harness: server started/stopped safely; five project providers observed FAIL_NETWORK; npm/crates observed FAIL_UPSTREAM_HTTP; PyPI observed empty-after-degraded FAIL_NETWORK; Gitee DEGRADED_FALLBACK",
+    "Live cache re-hit: attempted GitHub, Hugging Face, npm twice each; no live hit verified because provider calls were unavailable",
+    "In-app browser smoke: degraded UI, http client search, detail, favorite reload, package error, comparison rule judgment, Codex export passed; tab console warnings/errors 0"
   ],
   "live_upstream_acceptance": {
-    "status": "not_full_windows_acceptance",
+    "status": "incomplete_environment_blocked",
     "previous_oss_0p_evidence_preserved": true,
-    "current_shell_network": "restricted",
-    "modelscope": "historically_windows_accepted_in_prior_handoff; not re-run in OSS-0Q",
-    "package_ecosystems": "not re-run live in OSS-0Q"
+    "environment": "Windows win32-x64; Node 24.18.0; Asia/Shanghai",
+    "harness": "scripts/live-upstream-acceptance.mjs via RUN_LIVE_UPSTREAM_ACCEPTANCE.cmd",
+    "local_chain_verified": true,
+    "github": "FAIL_NETWORK; anonymous mode verified; no live rate-limit headers observed",
+    "huggingface": "FAIL_NETWORK",
+    "gitlab": "FAIL_NETWORK",
+    "codeberg": "FAIL_NETWORK",
+    "modelscope": "FAIL_NETWORK in current run; historical Windows evidence is preserved but not substituted",
+    "npm": "FAIL_UPSTREAM_HTTP",
+    "pypi": "FAIL_NETWORK; empty result after all related gateway providers degraded",
+    "crates": "FAIL_UPSTREAM_HTTP",
+    "gitee": "DEGRADED_FALLBACK; external-search only",
+    "pypistats": "FAIL_NETWORK via package dependency path",
+    "ecosystems": "FAIL_NETWORK via package dependency path",
+    "cache_live_rehit_verified": false,
+    "github_anonymous_verified": true,
+    "github_authenticated_verified": false,
+    "browser_live_smoke": "passed_local_degraded_path; external live provider payload not observed"
   },
   "public_runtime_risk_changes": {
     "browser_direct_calls": "mitigated_for_normal_path",
-    "github_rate_limit": "partially_mitigated",
-    "package_reliability": "partially_mitigated",
-    "cors_service_instability": "partially_mitigated",
+    "github_rate_limit": "partially_mitigated; live quota unverified",
+    "package_reliability": "partially_mitigated; current network blocked",
+    "cors_service_instability": "partially_mitigated; browser degraded path verified",
     "gitee_fallback_ambiguity": "mitigated",
     "public_governance_adoption": "open"
   },
@@ -115,9 +136,10 @@
     "Package metrics remain ecosystem-specific and are not directly cross-ranked",
     "Gitee remains fallback-only",
     "Trust signals remain public risk signals, not certification",
-    "No public repository, release, issue, PR, or adoption evidence exists"
+    "No public repository, release, issue, PR, or adoption evidence exists",
+    "Browser network panel was not exposed by the automation backend; no live success was inferred from that limitation"
   ],
-  "next_task": "Run full Windows live acceptance for the local server across GitHub, Hugging Face, GitLab, Codeberg, ModelScope, npm, PyPI, crates.io, and Gitee fallback, then record only observed provider states.",
+  "next_task": "Rerun RUN_LIVE_UPSTREAM_ACCEPTANCE.cmd from an ordinary Windows Terminal with outbound provider access and record the observed matrix.",
   "key_files": [
     "upstream-gateway.mjs",
     "upstream-cache-store.mjs",
@@ -131,6 +153,9 @@
     "docs/UPSTREAM_AUDIT.md",
     "docs/SOURCE_LEDGER.json",
     "docs/PUBLIC_RUNTIME_RISK_REGISTER.md",
+    "docs/LIVE_UPSTREAM_ACCEPTANCE.md",
+    "scripts/live-upstream-acceptance.mjs",
+    "RUN_LIVE_UPSTREAM_ACCEPTANCE.cmd",
     "HANDOFF.md",
     "docs/HANDOFF_LOG.md"
   ]

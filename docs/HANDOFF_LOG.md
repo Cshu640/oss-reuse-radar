@@ -342,3 +342,19 @@
 - Workspace: feature implementation and handoff documents are committed in `270961e`, `f24c361`, and `ec88f17`; the final three-file machine-evidence snapshot is intentionally unstaged/dirty. No runtime data was deleted and no generated secrets were created.
 - Unique next task: run full Windows live acceptance for the local server across GitHub, Hugging Face, GitLab, Codeberg, ModelScope, npm, PyPI, crates.io, and Gitee fallback, then record only observed provider states.
 - Key files: `upstream-gateway.mjs`, `upstream-cache-store.mjs`, `platform-adapters.js`, `package-service.mjs`, `server.mjs`, `app.js`, `tests/upstream_gateway_test.mjs`, `docs/UPSTREAM_GATEWAY_DECISION.md`, `docs/UPSTREAM_AUDIT.md`, `docs/SOURCE_LEDGER.json`, `docs/PUBLIC_RUNTIME_RISK_REGISTER.md`, `docs/PROJECT_STATE.json`.
+
+## 2026-08-11 — OSS-0Q.1 Windows live upstream acceptance
+
+- Current phase/status: OSS-0Q.1; `windows_live_upstream_acceptance_incomplete_environment_blocked`.
+- Branch/HEAD at the final evidence snapshot: `oss/phase-0-public-readiness` / `a30a06f`; OSS-0Q checkpoint commit `fe68af1`; harness commit `a30a06f`. No remote, tag, push, merge, release, or public repository.
+- Freeze: the three intentional OSS-0Q handoff edits were committed with the exact required message `docs: checkpoint OSS-0Q upstream hardening handoff` before acceptance.
+- Harness: `scripts/live-upstream-acceptance.mjs` plus `RUN_LIVE_UPSTREAM_ACCEPTANCE.cmd` starts `node server.mjs` on an ephemeral port, sets `OPENRADAR_AUTO_COLLECT=0`, forces anonymous GitHub, records only sanitized local-route evidence, and stops only its own child. Generated evidence is ignored at `artifacts/live-upstream-acceptance.json`.
+- Live results: the local chain started successfully. GitHub, Hugging Face, GitLab, Codeberg, and ModelScope were `FAIL_NETWORK`; npm and crates.io were local 502 `FAIL_UPSTREAM_HTTP`; PyPI was empty-after-degraded `FAIL_NETWORK`; Gitee was `DEGRADED_FALLBACK` external search only. No live GitHub quota headers, provider success, or cache re-hit was observed.
+- Browser results: home, `http client` search, per-source degraded badges, detail/source facts, favorite save+reload, package page, comparison rule judgment, and Codex packet export passed. Console warning/error count from the tab API was zero. The backend exposed no full network panel, so no external success was inferred.
+- Tests: harness syntax and `git diff --check` passed; the existing Node suite remains 30/30; the ignored artifact is machine-readable and contains no token, Authorization header, cookie, raw environment value, or private path.
+- Completed/not completed: repeatable acceptance path and honest evidence are complete; provider-success run on an ordinary outbound Windows network, authenticated GitHub, live cache re-hit, standalone Playwright, natural-time growth, and public maintenance/adoption remain incomplete.
+- Blockers/risks: current outbound network boundary; missing Python Playwright; ecosystem metrics differ; Gitee is fallback-only; no public maintenance/adoption evidence. `PUBLIC_BETA_RELEASE_GATE_READY = false`; readiness remains `50/100 — NO` and no adoption points were added.
+- Forbidden honored: no new platform, paid API, token exposure, direct browser provider call, fake PASS, automatic Codex launch, public repo, remote, push, tag, merge, release, or broad redesign.
+- Workspace: final docs/state/log edits are intentionally dirty for audit after the harness commit; no staged files and no runtime data deletion.
+- Unique next task: rerun `RUN_LIVE_UPSTREAM_ACCEPTANCE.cmd` from an ordinary Windows Terminal with outbound provider access and record the observed matrix.
+- Key files: `docs/LIVE_UPSTREAM_ACCEPTANCE.md`, `docs/PROJECT_STATE.json`, `docs/PUBLIC_RUNTIME_RISK_REGISTER.md`, `scripts/live-upstream-acceptance.mjs`, `RUN_LIVE_UPSTREAM_ACCEPTANCE.cmd`, `upstream-gateway.mjs`, `server.mjs`, `app.js`.

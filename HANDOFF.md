@@ -144,3 +144,18 @@ Phase 0.4-A.1已由用户在Windows真实环境验收：双击启动器、来源
 - Forbidden: no paid API, new platform, browser token, cloud collector, automatic Codex execution, fake live/adoption evidence, push, merge, tag, release, or broad redesign.
 - Unique next task: run full Windows live acceptance for the local server across all supported sources and record only observed provider states.
 - Key files: `upstream-gateway.mjs`, `upstream-cache-store.mjs`, `platform-adapters.js`, `package-service.mjs`, `server.mjs`, `app.js`, `tests/upstream_gateway_test.mjs`, `docs/UPSTREAM_GATEWAY_DECISION.md`, `docs/PUBLIC_RUNTIME_RISK_REGISTER.md`, `docs/PROJECT_STATE.json`.
+
+## OSS-0Q.1 Windows live upstream acceptance (2026-08-11)
+
+- Current phase: OSS-0Q.1 Windows Live Upstream Acceptance; acceptance is incomplete because the current Windows/Codex network could not reach the providers.
+- Branch/HEAD: `oss/phase-0-public-readiness` / `a30a06f` (`test: add repeatable live upstream acceptance harness`). The OSS-0Q handoff checkpoint is `fe68af1`; no tag, remote, push, merge, release, or public repository exists.
+- Completed: the exact OSS-0Q checkpoint was frozen; `scripts/live-upstream-acceptance.mjs` and `RUN_LIVE_UPSTREAM_ACCEPTANCE.cmd` were committed; the harness started and stopped only its own `node server.mjs`; anonymous GitHub mode was enforced; all five project routes, npm/PyPI/crates probes, Gitee fallback, and cache re-hit attempts were recorded in the real local-server-to-gateway chain.
+- Observed: GitHub, Hugging Face, GitLab, Codeberg, and ModelScope returned sanitized `FAIL_NETWORK` envelopes; npm/crates returned local 502 `FAIL_UPSTREAM_HTTP`; PyPI returned an empty array while all related gateway providers were degraded and was recorded `FAIL_NETWORK`; Gitee returned `DEGRADED_FALLBACK` external search only. No live GitHub rate-limit headers or live cache hit were observed.
+- Browser smoke: local home/search/detail/package/comparison/Codex flows, degraded badges, favorite save+reload persistence, and console warning/error check passed. Browser automation did not expose a full network panel, so no external live success was inferred.
+- Not completed: a provider-success run from an ordinary Windows network; authenticated GitHub verification; live cache re-hit; standalone Python Playwright mock; natural-time growth; public repository/release/maintenance/adoption evidence.
+- Current blockers: current outbound network boundary; bundled Python lacks `playwright`; public maintenance/adoption still requires an approved public repository and real users.
+- Known risks: provider availability and rate-limit headers vary by network; package metrics retain ecosystem-specific meanings; Gitee remains fallback-only; memory cache clears on restart; public release gate remains `PUBLIC_BETA_RELEASE_GATE_READY = false` and readiness remains `50/100 — NO`.
+- Forbidden: no token exposure, paid API, new platform, direct browser provider call, fake PASS, automatic Codex launch, public repository, remote, push, tag, merge, release, or broad redesign.
+- Workspace/Git: after the harness commit, final docs/state/log edits are intentionally dirty for audit; no staged files, tag, push, merge, remote, or public repo. No runtime data was deleted.
+- Unique next task: rerun `RUN_LIVE_UPSTREAM_ACCEPTANCE.cmd` from an ordinary Windows Terminal with outbound provider access and record the observed matrix.
+- Key files: `docs/LIVE_UPSTREAM_ACCEPTANCE.md`, `docs/PROJECT_STATE.json`, `docs/PUBLIC_RUNTIME_RISK_REGISTER.md`, `scripts/live-upstream-acceptance.mjs`, `RUN_LIVE_UPSTREAM_ACCEPTANCE.cmd`, `upstream-gateway.mjs`, `server.mjs`, `app.js`.

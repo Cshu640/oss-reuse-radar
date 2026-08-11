@@ -210,9 +210,8 @@ Phase 0.4-A.1已由用户在Windows真实环境验收：双击启动器、来源
 
 - Current phase/status: OSS-0R; v0.1.0 release candidate audit complete;
   `PUBLIC_RELEASE_GO = true` pending explicit user approval.
-- Branch/HEAD: `oss/phase-0-public-readiness` / `6a3ca65` before the final
-  release-candidate docs commit; the docs commit is recorded in the
-  post-commit evidence snapshot. Prior commits: OSS-0Q.1 freeze `857f8af`,
+- Branch/HEAD: `oss/phase-0-public-readiness` / `e0eb99d` (`docs: prepare
+  v0.1.0 public release candidate`). Prior commits: OSS-0Q.1 freeze `857f8af`,
   MIT license fix `c4e3812`, browser mock/CI fix `6a3ca65`. No tag, remote,
   push, merge, release, or public repository exists.
 - Freeze: OSS-0Q.1 final evidence committed as `docs: freeze OSS-0Q1

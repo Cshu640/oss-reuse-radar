@@ -408,10 +408,10 @@
 - Current phase/status: OSS-0R;
   `public_beta_release_gate_complete_pending_user_approval`.
 - Branch/HEAD at the final evidence snapshot:
-  `oss/phase-0-public-readiness` / (final docs commit, recorded in the
-  post-commit evidence trio). Prior commits: OSS-0Q.1 freeze `857f8af`, MIT
-  license fix `c4e3812`, browser mock/CI fix `6a3ca65`. No remote, tag, push,
-  merge, release, or public repository.
+  `oss/phase-0-public-readiness` / `e0eb99d` (`docs: prepare v0.1.0 public
+  release candidate`). Prior commits: OSS-0Q.1 freeze `857f8af`, MIT license
+  fix `c4e3812`, browser mock/CI fix `6a3ca65`. No remote, tag, push, merge,
+  release, or public repository.
 - Freeze: `docs: freeze OSS-0Q1 release-gate handoff` committed the OSS-0Q.1
   evidence trio; working tree was clean before OSS-0R work.
 - Secret audit: `git grep` over all 36 reachable commits found no real

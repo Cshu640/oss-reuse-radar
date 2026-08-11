@@ -1,3 +1,5 @@
+import { projectProviderForUrl } from './upstream-gateway.mjs';
+
 const DEFAULT_TIMEOUT = 12_000;
 const DEFAULT_CACHE_TTL = 15 * 60 * 1000;
 
@@ -75,6 +77,7 @@ function licenseName(value) {
 }
 
 async function fetchWithTimeout(fetchImpl, url, options = {}, timeoutMs = DEFAULT_TIMEOUT) {
+  if (fetchImpl?.__openradarGateway) return fetchImpl(url, options, timeoutMs);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -95,13 +98,13 @@ async function fetchWithTimeout(fetchImpl, url, options = {}, timeoutMs = DEFAUL
 }
 
 async function fetchJson(fetchImpl, url, options = {}, timeoutMs) {
-  const response = await fetchWithTimeout(fetchImpl, url, options, timeoutMs);
+  const response = await fetchWithTimeout(fetchImpl, url, { ...options, __openradarParse: 'json' }, timeoutMs);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
 
 async function fetchText(fetchImpl, url, options = {}, timeoutMs) {
-  const response = await fetchWithTimeout(fetchImpl, url, options, timeoutMs);
+  const response = await fetchWithTimeout(fetchImpl, url, { ...options, __openradarParse: 'text' }, timeoutMs);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.text();
 }
@@ -389,7 +392,31 @@ function uniqueProjects(projects = []) {
   return [...new Map(projects.filter((project) => project?.id).map((project) => [project.id.toLowerCase(), project])).values()];
 }
 
-export function createPackageService({ fetchImpl = fetch, now = () => Date.now(), timeoutMs = DEFAULT_TIMEOUT, cacheTtlMs = DEFAULT_CACHE_TTL } = {}) {
+export function createPackageService({ fetchImpl = fetch, gateway = null, now = () => Date.now(), timeoutMs = DEFAULT_TIMEOUT, cacheTtlMs = DEFAULT_CACHE_TTL } = {}) {
+  if (gateway) {
+    const gatewayFetch = async (url, options = {}, requestTimeoutMs = timeoutMs) => {
+      const { __openradarParse = 'json', signal: _signal, redirect: _redirect, ...requestOptions } = options;
+      const result = await gateway.request({
+        provider: projectProviderForUrl(url),
+        url,
+        method: requestOptions.method || 'GET',
+        headers: requestOptions.headers || {},
+        parse: __openradarParse,
+        timeoutMs: requestTimeoutMs,
+        cacheTtlMs,
+      });
+      const responseHeaders = {
+        'Content-Type': __openradarParse === 'text' ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8',
+        'X-OpenRadar-Cache': result.cacheStatus,
+        'X-OpenRadar-Degraded': String(Boolean(result.degraded)),
+        'X-OpenRadar-Degraded-Reason': result.degradedReason || '',
+      };
+      const body = __openradarParse === 'text' ? String(result.data || '') : JSON.stringify(result.data ?? null);
+      return new Response(body, { status: result.ok ? 200 : result.status || 502, headers: responseHeaders });
+    };
+    gatewayFetch.__openradarGateway = true;
+    fetchImpl = gatewayFetch;
+  }
   const cache = new Map();
   const stats = { searches: 0, radarRuns: 0, cacheHits: 0, lastError: '', lastSuccessAt: '' };
 

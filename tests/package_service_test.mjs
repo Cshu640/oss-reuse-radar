@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createPackageService, mapNpmSearchObject, pyPiProject, cratesProject } from '../package-service.mjs';
+import { createUpstreamGateway } from '../upstream-gateway.mjs';
 
 const calls = [];
 const json = (value) => new Response(JSON.stringify(value), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -37,4 +38,20 @@ assert.equal(service.status().cacheHits, 1);
 assert.equal(mapNpmSearchObject({ package: { name: 'x', links: { repository: 'git+https://github.com/a/x.git' } } }).repositoryUrl, 'https://github.com/a/x');
 assert.equal(pyPiProject({ info: { name: 'py-x', version: '1.0', summary: 'x' }, releases: {} }).packageSystem, 'pypi');
 assert.equal(cratesProject({ name: 'rs-x', max_version: '1.0' }).packageSystem, 'crates');
+
+let gatewayCalls = 0;
+const gateway = createUpstreamGateway({
+  fetchImpl: async (url) => {
+    gatewayCalls += 1;
+    if (String(url).includes('registry.npmjs.org/-/v1/search')) return json({ objects: [{ package: { name: 'gateway-package', version: '1.0.0', links: { npm: 'https://www.npmjs.com/package/gateway-package' } } }] });
+    if (String(url).includes('api.npmjs.org/downloads')) return json({ downloads: 99 });
+    throw new Error(`Unexpected gateway URL: ${url}`);
+  },
+});
+const gatewayService = createPackageService({ gateway, cacheTtlMs: 60_000 });
+const gatewayResult = await gatewayService.search('npm', 'gateway package', 5);
+await gatewayService.search('npm', 'gateway package', 5);
+assert.equal(gatewayResult.projects[0].downloads, 99);
+assert.equal(gatewayService.status().cacheHits, 1);
+assert.equal(gatewayCalls, 2);
 console.log(JSON.stringify({ npm: npm.projects[0].downloads, pypi: pypi.projects.length, crates: crates.projects.length, calls: calls.length }, null, 2));

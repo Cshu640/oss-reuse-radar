@@ -16,10 +16,11 @@ It is not another GitHub Trending clone. A ranking is only one input. The produc
 - Two-to-five project comparison using local rule-based dimensions, not a performance benchmark or legal conclusion.
 - Optional local Ollama explanations using `qwen3:4b`; rule summaries remain available when Ollama is unavailable.
 - Complete local backup/restore, including favorites, comparison state, history, insights, trust reports, identity corrections, and Codex research packets.
+- Server-side upstream gateway for normal platform/package calls, with bounded cache, ETag revalidation, in-flight dedupe, timeout, retry, provider isolation, and visible degraded/stale states.
 
 ## Local-first and cost model
 
-The first version is designed around zero paid API cost. Run `node server.mjs` so local persistence, package adapters, Gitee fallback behavior, trust checks, and Ollama integration are available. The app does not ship a GitHub token or any other service secret.
+The first version is designed around zero paid API cost. Run `node server.mjs` so local persistence, the upstream gateway, package adapters, Gitee fallback behavior, trust checks, and Ollama integration are available. The app does not ship a GitHub token or any other service secret. An optional `GITHUB_TOKEN` may be supplied to the server process through an untracked `.env`/environment configuration; it is never sent to browser code or returned by `/api/health`.
 
 Runtime data stays local and is ignored by Git: `data/*.json` and generated files under `exports/codex/`. The favorites compatibility key is `openradar:favorites:v1`; comparison state uses `openradar:compare:v1`.
 
@@ -48,7 +49,7 @@ CI runs these tests plus JavaScript syntax checks, Python compilation, and JSON 
 
 Public endpoints can be rate-limited, unavailable, changed, or subject to terms that differ from the repository license. npm monthly downloads, PyPI auxiliary download signals, and crates.io cumulative/recent downloads are not directly comparable. The source and license review is recorded in `docs/UPSTREAM_AUDIT.md` and `docs/SOURCE_LEDGER.json`.
 
-The current artifact still needs user-facing live acceptance for all upstream sources, stronger public-beta rate-limit handling, and natural-time history. See `docs/PUBLIC_RUNTIME_RISK_REGISTER.md` and `ROADMAP.md`.
+The current artifact still needs user-facing live acceptance for all upstream sources, public maintenance/adoption evidence, and natural-time history. The gateway's memory cache is cleared on server restart. See `docs/UPSTREAM_GATEWAY_DECISION.md`, `docs/PUBLIC_RUNTIME_RISK_REGISTER.md`, and `ROADMAP.md`.
 
 ## Contributing and license
 

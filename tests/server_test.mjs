@@ -8,6 +8,7 @@ import { HistoryStore } from '../history-store.mjs';
 import { createCodexExportService } from '../codex-export-service.mjs';
 import { IdentityStore } from '../identity-store.mjs';
 import { createBackupService } from '../backup-service.mjs';
+import { createUpstreamGateway } from '../upstream-gateway.mjs';
 
 const fixture = `<!doctype html><html><body>
 <article class="repo-card">
@@ -122,6 +123,14 @@ const packageService = {
   radar: async (ecosystem, limit) => ({ ecosystem, limit: Number(limit), projects: [{ id: `${ecosystem}:radar-tool`, platform: ecosystem, packageSystem: ecosystem, packageName: 'radar-tool', name: 'radar-tool', owner: 'demo', url: `https://example.test/${ecosystem}/radar-tool`, license: 'MIT', downloads: 5678 }] }),
 };
 
+let upstreamCalls = 0;
+const upstreamGateway = createUpstreamGateway({
+  fetchImpl: async () => {
+    upstreamCalls += 1;
+    return new Response(JSON.stringify({ items: [{ full_name: 'demo/upstream', name: 'upstream', owner: { login: 'demo' }, html_url: 'https://github.com/demo/upstream', stargazers_count: 9, forks_count: 1, pushed_at: '2026-08-01T00:00:00Z' }] }), { status: 200, headers: { 'Content-Type': 'application/json', 'X-RateLimit-Remaining': '42', 'X-RateLimit-Limit': '60', 'X-RateLimit-Used': '18', 'X-RateLimit-Resource': 'search' } });
+  },
+});
+
 const server = createOpenRadarServer({
   historyStore,
   historyCollector,
@@ -131,6 +140,7 @@ const server = createOpenRadarServer({
   trustService,
   backupService,
   packageService,
+  upstreamGateway,
   giteeSearch: async (query, limit) => ({
     projects: [{ full_name: 'mock/project', name: 'project', owner: { login: 'mock' }, html_url: 'https://gitee.com/mock/project' }],
     source: 'mock',
@@ -152,6 +162,22 @@ assert.equal(health.identityCorrections, true);
 assert.equal(health.trust, true);
 assert.equal(health.backup, true);
 assert.equal(health.packages, true);
+assert.equal(health.upstream.providers.github.authMode, 'anonymous');
+assert.equal(health.upstream.providers.github.rateLimit.remaining, null);
+
+const upstreamSearch = await fetch(`${base}/api/upstream/search?provider=github&q=upstream&limit=3`).then((response) => response.json());
+assert.equal(upstreamSearch.ok, true);
+assert.equal(upstreamSearch.provider, 'github');
+assert.equal(upstreamSearch.projects.length, 1);
+assert.equal(upstreamSearch.projects[0].id, 'github:demo/upstream');
+assert.equal(upstreamSearch.rateLimit.remaining, 42);
+const upstreamCached = await fetch(`${base}/api/upstream/search?provider=github&limit=3&q=upstream`).then((response) => response.json());
+assert.equal(upstreamCached.cacheStatus, 'fresh');
+assert.equal(upstreamCalls, 1);
+const upstreamStatus = await fetch(`${base}/api/upstream/status`).then((response) => response.json());
+assert.equal(upstreamStatus.providers.github.rateLimit.remaining, 42);
+const unsupported = await fetch(`${base}/api/upstream/search?provider=unknown&q=test`).then((response) => response.json());
+assert.equal(unsupported.degradedReason, 'unsupported-provider');
 
 
 const originalIdentity = await fetch(`${base}/api/identity/overrides`).then((response) => response.json());
@@ -253,4 +279,4 @@ server.close();
 await once(server, 'close');
 await rm(historyRoot, { recursive: true, force: true });
 
-console.log(JSON.stringify({ parsed: parsed.length, fallbackSource: fallback.source, exploreSource: explore.source, stopLossSource: stopLoss.source, health, codexFolder: codexExport.folder, proxied: proxied.projects.length, historyProjects: historyStatus.projectCount, insightModel: insightStatus.model, packageEcosystems: packageStatus.ecosystems }, null, 2));
+console.log(JSON.stringify({ parsed: parsed.length, fallbackSource: fallback.source, exploreSource: explore.source, stopLossSource: stopLoss.source, health, upstreamSearch: upstreamSearch.projects.length, codexFolder: codexExport.folder, proxied: proxied.projects.length, historyProjects: historyStatus.projectCount, insightModel: insightStatus.model, packageEcosystems: packageStatus.ecosystems }, null, 2));

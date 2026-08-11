@@ -11,7 +11,15 @@ import { TrustStore } from './trust-store.mjs';
 import { createTrustService } from './trust-service.mjs';
 import { createBackupService } from './backup-service.mjs';
 import { createPackageService } from './package-service.mjs';
-import { platformIds, radarPlatform } from './platform-adapters.js';
+import {
+  platformIds,
+  fromGitHub,
+  fromHuggingFace,
+  fromGitLab,
+  fromCodeberg,
+  fromModelScope,
+} from './platform-adapters.js';
+import { createUpstreamGateway } from './upstream-gateway.mjs';
 
 const ROOT_DIR = fileURLToPath(new URL('.', import.meta.url));
 const DEFAULT_PORT = Number(process.env.PORT || 8080);
@@ -20,6 +28,7 @@ const CACHE_TTL = 15 * 60 * 1000;
 const HISTORY_INTERVAL = 6 * 60 * 60 * 1000;
 const PACKAGE_PLATFORMS = new Set(['npm', 'pypi', 'crates']);
 const HISTORY_PLATFORMS = platformIds.filter((platformId) => platformId !== 'gitee');
+const UPSTREAM_PROJECT_PLATFORMS = new Set(['github', 'huggingface', 'gitlab', 'codeberg', 'modelscope']);
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -99,6 +108,34 @@ function repositoryFromObject(value) {
     updated_at: value.updated_at || value.last_activity_at || value.last_push_at || '',
     created_at: value.created_at || '',
     topics: Array.isArray(value.topics) ? value.topics : [],
+  };
+}
+
+function mapUpstreamProjects(provider, data) {
+  const values = provider === 'github'
+    ? data?.items
+    : provider === 'codeberg'
+      ? (data?.data || data)
+      : provider === 'modelscope'
+        ? (data?.data?.models || data?.models || data?.data)
+        : data;
+  const mapper = {
+    github: fromGitHub,
+    huggingface: fromHuggingFace,
+    gitlab: fromGitLab,
+    codeberg: fromCodeberg,
+    modelscope: fromModelScope,
+  }[provider];
+  if (!mapper || !Array.isArray(values)) return [];
+  return values.map(mapper).filter((project) => project?.id && project?.name && project?.url);
+}
+
+function createServerRadarPlatform(upstreamGateway) {
+  return async function serverRadarPlatform(platformId) {
+    if (!UPSTREAM_PROJECT_PLATFORMS.has(platformId)) throw new Error(`Unsupported upstream platform: ${platformId}`);
+    const result = await upstreamGateway.radarProjects(platformId, 18);
+    if (!result.ok && !result.data) throw new Error(result.degradedReason || `${platformId} radar unavailable`);
+    return mapUpstreamProjects(platformId, result.data);
   };
 }
 
@@ -208,6 +245,12 @@ export function createGiteeSearchService({ fetchImpl = fetch, now = () => Date.n
     'User-Agent': 'OpenRadar/0.2-B.1 (+local personal open-source radar)',
   };
 
+  function save(cacheKey, value) {
+    const stamped = { ...value, fetchedAt: value.fetchedAt || new Date(now()).toISOString() };
+    cache.set(cacheKey, { savedAt: now(), value: stamped });
+    return stamped;
+  }
+
   return async function searchGitee(query, limit = 20, options = {}) {
     const safeQuery = String(query || '').trim().slice(0, 200);
     const safeLimit = Math.min(30, Math.max(1, Number(limit) || 20));
@@ -228,8 +271,7 @@ export function createGiteeSearchService({ fetchImpl = fetch, now = () => Date.n
       diagnostics.v5 = `http-${response.status}:count-${projects.length}`;
       if (projects.length) {
         const value = { projects: projects.slice(0, safeLimit), source: 'gitee-v5-api', warning: '' };
-        cache.set(cacheKey, { savedAt: now(), value });
-        return value;
+        return save(cacheKey, value);
       }
       warnings.push('Gitee v5 API返回空结果');
     } catch (error) {
@@ -250,8 +292,7 @@ export function createGiteeSearchService({ fetchImpl = fetch, now = () => Date.n
           warning: warnings.join('；'),
           diagnostics,
         };
-        cache.set(cacheKey, { savedAt: now(), value });
-        return value;
+        return save(cacheKey, value);
       }
       warnings.push('Gitee官方搜索动态页未返回可解析仓库');
     } catch (error) {
@@ -273,8 +314,7 @@ export function createGiteeSearchService({ fetchImpl = fetch, now = () => Date.n
             warning: [...warnings, '关键词搜索不可用，首页改用Gitee公开探索页'].join('；'),
             diagnostics,
           };
-          cache.set(cacheKey, { savedAt: now(), value });
-          return value;
+          return save(cacheKey, value);
         }
         warnings.push('Gitee公开探索页未返回可解析仓库');
       } catch (error) {
@@ -291,8 +331,7 @@ export function createGiteeSearchService({ fetchImpl = fetch, now = () => Date.n
       externalUrl: webUrl,
       diagnostics,
     };
-    cache.set(cacheKey, { savedAt: now(), value });
-    return value;
+    return save(cacheKey, value);
   };
 }
 
@@ -411,12 +450,41 @@ async function serveStatic(req, res, rootDir) {
   }
 }
 
-export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = createGiteeSearchService(), historyStore = null, historyCollector = null, insightService = null, codexExportService = null, identityStore = null, trustService = null, backupService = null, packageService = null } = {}) {
+export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = createGiteeSearchService(), upstreamGateway = createUpstreamGateway(), historyStore = null, historyCollector = null, insightService = null, codexExportService = null, identityStore = null, trustService = null, backupService = null, packageService = null } = {}) {
   return createServer(async (req, res) => {
     try {
       const requestUrl = new URL(req.url || '/', 'http://localhost');
       if (req.method === 'GET' && requestUrl.pathname === '/api/health') {
-        json(res, 200, { status: 'ok', version: '0.4-B', giteeProxy: true, giteeMode: 'bounded-fallback', history: Boolean(historyStore), historyCollector: historyCollector?.getState?.() || null, insights: Boolean(insightService), codexExport: Boolean(codexExportService), identityCorrections: Boolean(identityStore), trust: Boolean(trustService), backup: Boolean(backupService), packages: Boolean(packageService), packageStatus: packageService?.status?.() || null });
+        json(res, 200, { status: 'ok', version: '0.4-B', giteeProxy: true, giteeMode: 'bounded-fallback', history: Boolean(historyStore), historyCollector: historyCollector?.getState?.() || null, insights: Boolean(insightService), codexExport: Boolean(codexExportService), identityCorrections: Boolean(identityStore), trust: Boolean(trustService), backup: Boolean(backupService), packages: Boolean(packageService), packageStatus: packageService?.status?.() || null, upstream: upstreamGateway.status() });
+        return;
+      }
+      if (req.method === 'GET' && requestUrl.pathname === '/api/upstream/status') {
+        json(res, 200, upstreamGateway.status());
+        return;
+      }
+      if (req.method === 'GET' && requestUrl.pathname === '/api/upstream/search') {
+        const provider = String(requestUrl.searchParams.get('provider') || '').trim().toLowerCase();
+        const query = String(requestUrl.searchParams.get('q') || '').trim().slice(0, 200);
+        const limit = Math.min(30, Math.max(1, Number(requestUrl.searchParams.get('limit')) || 12));
+        if (!UPSTREAM_PROJECT_PLATFORMS.has(provider)) {
+          json(res, 400, { ok: false, provider, data: [], projects: [], cacheStatus: 'miss', degraded: true, degradedReason: 'unsupported-provider', fetchedAt: '', rateLimit: null });
+          return;
+        }
+        const result = await upstreamGateway.searchProjects(provider, query, limit);
+        const projects = mapUpstreamProjects(provider, result.data);
+        json(res, 200, { ...result, data: projects, projects });
+        return;
+      }
+      if (req.method === 'GET' && requestUrl.pathname === '/api/upstream/radar') {
+        const provider = String(requestUrl.searchParams.get('provider') || '').trim().toLowerCase();
+        const limit = Math.min(30, Math.max(1, Number(requestUrl.searchParams.get('limit')) || 18));
+        if (!UPSTREAM_PROJECT_PLATFORMS.has(provider)) {
+          json(res, 400, { ok: false, provider, data: [], projects: [], cacheStatus: 'miss', degraded: true, degradedReason: 'unsupported-provider', fetchedAt: '', rateLimit: null });
+          return;
+        }
+        const result = await upstreamGateway.radarProjects(provider, limit);
+        const projects = mapUpstreamProjects(provider, result.data);
+        json(res, 200, { ...result, data: projects, projects });
         return;
       }
       if (req.method === 'GET' && requestUrl.pathname === '/api/history/status') {
@@ -647,9 +715,19 @@ export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = create
         try {
           const result = await giteeSearch(query, limit, { allowExplore });
           console.log(`[Gitee] q=${JSON.stringify(query)} source=${result.source} count=${result.projects?.length || 0} ${JSON.stringify(result.diagnostics || {})}`);
-          json(res, 200, result);
+          json(res, 200, {
+            ok: true,
+            provider: 'gitee',
+            data: result.projects || [],
+            cacheStatus: result.cached ? 'fresh' : 'miss',
+            degraded: Boolean(result.degraded),
+            degradedReason: result.degraded ? 'gitee-fallback-only' : null,
+            fetchedAt: result.fetchedAt || new Date().toISOString(),
+            rateLimit: null,
+            ...result,
+          });
         } catch (error) {
-          json(res, 502, { error: error?.message || 'Gitee compatibility channel failed' });
+          json(res, 200, { ok: false, provider: 'gitee', data: [], projects: [], cacheStatus: 'miss', degraded: true, degradedReason: 'gitee-unavailable', fetchedAt: '', rateLimit: null });
         }
         return;
       }
@@ -667,10 +745,11 @@ export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = create
 const entryPath = process.argv[1] ? resolve(process.argv[1]) : '';
 if (entryPath && pathToFileURL(entryPath).href === import.meta.url) {
   const startOpenRadar = async () => {
-    const packageService = createPackageService();
+    const upstreamGateway = createUpstreamGateway();
+    const packageService = createPackageService({ gateway: upstreamGateway });
     const historyStore = new HistoryStore(resolve(ROOT_DIR, 'data/history.json'));
     await historyStore.init();
-    const historyCollector = createHistoryCollector({ historyStore, packageService });
+    const historyCollector = createHistoryCollector({ historyStore, packageService, radarPlatformImpl: createServerRadarPlatform(upstreamGateway) });
     const insightStore = new InsightStore(resolve(ROOT_DIR, 'data/insights.json'));
     await insightStore.init();
     const insightService = createInsightService({ store: insightStore });
@@ -681,7 +760,7 @@ if (entryPath && pathToFileURL(entryPath).href === import.meta.url) {
     await trustStore.init();
     const trustService = createTrustService({ store: trustStore });
     const backupService = createBackupService({ rootDir: ROOT_DIR });
-    const server = createOpenRadarServer({ historyStore, historyCollector, insightService, codexExportService, identityStore, trustService, backupService, packageService });
+    const server = createOpenRadarServer({ historyStore, historyCollector, insightService, codexExportService, identityStore, trustService, backupService, packageService, upstreamGateway });
     server.on('error', (error) => {
       console.error('');
       if (error?.code === 'EADDRINUSE') {

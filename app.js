@@ -1487,6 +1487,10 @@ function sourceStatusEntry(stateName, count = 0, message = '', badge = '') {
 
 function readableError(error) {
   const message = error?.message || String(error || '未知错误');
+  if (/primary-rate-limit|rate-limited-cooldown/i.test(message)) return '上游限流，暂不重复请求';
+  if (/secondary-rate-limit/i.test(message)) return '上游次级限流，已降低请求频率';
+  if (/upstream-http-(429|403)/i.test(message)) return '上游限流或暂时拒绝';
+  if (/upstream-http-5\d\d|upstream-unavailable|network-error|timeout/i.test(message)) return '上游暂不可用';
   if (/Failed to fetch|NetworkError|Load failed/i.test(message)) return '网络或跨域限制';
   return message;
 }
@@ -1738,12 +1742,13 @@ async function radar(force = false) {
       const projects = dedupeProjects(response.value || []);
       liveProjects.push(...projects);
       const fallback = projects.some((project) => project.sourceMode === 'gitee-official-search');
+      const cached = projects.find((project) => ['fresh', 'stale', 'revalidated'].includes(project.sourceCacheStatus));
       const warning = unique(projects.map((project) => project.sourceWarning)).join('；');
       state.sourceStatus[platformId] = sourceStatusEntry(
         projects.length ? 'live' : 'empty',
         projects.length,
         warning,
-        fallback ? '搜索回退' : '',
+        fallback ? '搜索回退' : cached?.sourceCacheStatus === 'stale' ? '过期缓存（非实时）' : cached?.sourceCacheStatus === 'fresh' ? '服务端缓存（非实时）' : cached?.sourceCacheStatus === 'revalidated' ? '已重新验证' : '',
       );
     } else if (response.reason?.degraded) {
       state.sourceStatus[platformId] = sourceStatusEntry('empty', 0, readableError(response.reason), response.reason.badge || '外部搜索');
@@ -1870,7 +1875,10 @@ async function searchProjects(query) {
         response.value.projects.length ? 'live' : 'empty',
         response.value.projects.length,
         messages,
-        response.value.fallback ? '搜索回退' : '',
+        response.value.fallback ? '搜索回退' : (() => {
+          const cached = response.value.projects.find((project) => ['fresh', 'stale', 'revalidated'].includes(project.sourceCacheStatus));
+          return cached?.sourceCacheStatus === 'stale' ? '过期缓存（非实时）' : cached?.sourceCacheStatus === 'fresh' ? '服务端缓存（非实时）' : cached?.sourceCacheStatus === 'revalidated' ? '已重新验证' : '';
+        })(),
       );
     } else if (response.reason?.degraded) {
       state.searchSourceStatus[platformId] = sourceStatusEntry('empty', 0, readableError(response.reason), response.reason.badge || '外部搜索');
@@ -1933,7 +1941,8 @@ async function detectRuntimeMode() {
     state.packageServiceAvailable = Boolean(health.packages);
     els.runtimeMode.textContent = '● 本地兼容服务';
     els.runtimeMode.className = 'runtime-live';
-    els.runtimeDetail.textContent = health.insights ? `代码、模型与软件包生态 · 历史、本地AI、可信度、完整备份与${health.codexExport ? 'Codex研究包' : '浏览器研究提示词'}` : '代码、模型与软件包生态 · 跨平台纠错 · 本地历史与完整备份';
+    const githubAuthMode = health.upstream?.providers?.github?.authMode === 'authenticated' ? 'GitHub已认证' : 'GitHub匿名';
+    els.runtimeDetail.textContent = health.insights ? `代码、模型与软件包生态 · ${githubAuthMode} · 历史、本地AI、可信度、完整备份与${health.codexExport ? 'Codex研究包' : '浏览器研究提示词'}` : `代码、模型与软件包生态 · ${githubAuthMode} · 跨平台纠错 · 本地历史与完整备份`;
     renderServiceStatuses();
     if (state.identityServiceAvailable) await loadIdentityOverridesFromServer();
   } catch {

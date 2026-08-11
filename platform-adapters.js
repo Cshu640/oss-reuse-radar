@@ -147,7 +147,7 @@ function licenseName(value) {
   return value.spdx_id || value.key || value.name || value.title || '许可证待核查';
 }
 
-function fromGitHub(repository) {
+export function fromGitHub(repository) {
   return {
     id: `github:${repository.full_name}`,
     platform: 'github',
@@ -168,7 +168,7 @@ function fromGitHub(repository) {
   };
 }
 
-function fromHuggingFace(model) {
+export function fromHuggingFace(model) {
   const identity = splitId(model.id);
   return {
     id: `huggingface:${model.id}`,
@@ -190,7 +190,7 @@ function fromHuggingFace(model) {
   };
 }
 
-function fromGitLab(project) {
+export function fromGitLab(project) {
   const fullName = project.path_with_namespace || project.name_with_namespace || project.path || project.name;
   const identity = splitId(fullName);
   return {
@@ -213,7 +213,7 @@ function fromGitLab(project) {
   };
 }
 
-function fromCodeberg(repository) {
+export function fromCodeberg(repository) {
   const fullName = repository.full_name || `${repository.owner?.login || ''}/${repository.name || ''}`.replace(/^\//, '');
   const identity = splitId(fullName);
   return {
@@ -236,7 +236,7 @@ function fromCodeberg(repository) {
   };
 }
 
-function fromGitee(repository) {
+export function fromGitee(repository) {
   const fullName = repository.full_name || repository.human_name || `${repository.owner?.login || ''}/${repository.path || repository.name || ''}`.replace(/^\//, '');
   const identity = splitId(fullName);
   return {
@@ -259,7 +259,7 @@ function fromGitee(repository) {
   };
 }
 
-function fromModelScope(model) {
+export function fromModelScope(model) {
   const modelId = model.id || model.model_id || model.path || model.Path || model.name;
   const identity = splitId(modelId);
   const tasks = array(model.tasks || model.Tasks || model.pipeline_tags);
@@ -285,31 +285,6 @@ function fromModelScope(model) {
   };
 }
 
-async function searchGitHub(query, limit) {
-  const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(`${query} archived:false`)}&sort=stars&order=desc&per_page=${limit}`;
-  const data = await fetchJson(url, { headers: { Accept: 'application/vnd.github+json' } });
-  return mapProjects(data.items, fromGitHub);
-}
-
-async function searchHuggingFace(query, limit) {
-  const url = `https://huggingface.co/api/models?search=${encodeURIComponent(query)}&sort=downloads&direction=-1&limit=${limit}&full=false`;
-  const data = await fetchJson(url);
-  return mapProjects(data, fromHuggingFace);
-}
-
-async function searchGitLab(query, limit) {
-  const url = `https://gitlab.com/api/v4/projects?search=${encodeURIComponent(query)}&visibility=public&order_by=star_count&sort=desc&per_page=${limit}&simple=false`;
-  const data = await fetchJson(url);
-  return mapProjects(data, fromGitLab);
-}
-
-async function searchCodeberg(query, limit) {
-  const url = `https://codeberg.org/api/v1/repos/search?q=${encodeURIComponent(query)}&sort=updated&order=desc&limit=${limit}`;
-  const data = await fetchJson(url);
-  return mapProjects(data.data || data, fromCodeberg);
-}
-
-
 function platformDegraded(message, badge = '外部搜索') {
   const error = new Error(message);
   error.degraded = true;
@@ -319,7 +294,6 @@ function platformDegraded(message, badge = '外部搜索') {
 
 async function searchGitee(query, limit, mode = 'search') {
   const proxyUrl = `/api/gitee/search?q=${encodeURIComponent(query)}&limit=${limit}${mode === 'radar' ? '&mode=radar' : ''}`;
-  let proxyError;
   try {
     const data = await fetchJson(proxyUrl, { headers: { Accept: 'application/json' } });
     const projects = mapProjects(data?.projects, fromGitee).map((project) => ({
@@ -332,22 +306,32 @@ async function searchGitee(query, limit, mode = 'search') {
     if (Array.isArray(data?.projects)) return projects;
   } catch (error) {
     if (error?.degraded) throw error;
-    proxyError = error;
-  }
-
-  try {
-    const directUrl = `https://gitee.com/api/v5/search/repositories?q=${encodeURIComponent(query)}&sort=stars_count&order=desc&per_page=${limit}`;
-    const data = await fetchJson(directUrl, { headers: { Accept: 'application/json' } });
-    return mapProjects(data, fromGitee);
-  } catch (directError) {
-    throw new Error(`Gitee兼容通道不可用：${proxyError?.message || '本地代理未启动'}；浏览器直连：${directError?.message || directError}。请使用 node server.mjs 启动OpenRadar`);
+    throw new Error(`Gitee兼容通道不可用：${error?.message || error}。请使用 node server.mjs 启动OpenRadar`);
   }
 }
 
-async function searchModelScope(query, limit) {
-  const url = `https://modelscope.cn/openapi/v1/models?search=${encodeURIComponent(query)}&sort=downloads&page_size=${limit}`;
-  const data = await fetchJson(url, { headers: { Accept: 'application/json' } });
-  return mapProjects(data?.data?.models || data?.models || data?.data, fromModelScope);
+async function searchUpstream(provider, query, limit) {
+  const data = await fetchJson(`/api/upstream/search?provider=${encodeURIComponent(provider)}&q=${encodeURIComponent(query)}&limit=${limit}`, { headers: { Accept: 'application/json' } });
+  const projects = Array.isArray(data?.projects) ? data.projects : [];
+  if (!data?.ok && !projects.length) throw platformDegraded(data?.degradedReason || '上游暂不可用', data?.cacheStatus === 'stale' ? '过期缓存' : '上游不可用');
+  return annotateUpstreamProjects(projects, data);
+}
+
+function annotateUpstreamProjects(projects, envelope) {
+  const cacheStatus = envelope?.cacheStatus || 'miss';
+  const sourceWarning = envelope?.degraded
+    ? '上游当前不可用，显示有限缓存（非实时）'
+    : cacheStatus === 'fresh'
+      ? '服务端缓存结果（非实时）'
+      : cacheStatus === 'revalidated'
+        ? '已使用条件请求重新验证'
+        : '';
+  return projects.map((project) => ({
+    ...project,
+    sourceCacheStatus: cacheStatus,
+    sourceDegraded: Boolean(envelope?.degraded),
+    sourceWarning: [project.sourceWarning, sourceWarning].filter(Boolean).join('；'),
+  }));
 }
 
 async function searchPackageEcosystem(ecosystem, query, limit) {
@@ -356,12 +340,12 @@ async function searchPackageEcosystem(ecosystem, query, limit) {
 }
 
 const searchers = {
-  github: searchGitHub,
-  huggingface: searchHuggingFace,
-  gitlab: searchGitLab,
-  codeberg: searchCodeberg,
+  github: (query, limit) => searchUpstream('github', query, limit),
+  huggingface: (query, limit) => searchUpstream('huggingface', query, limit),
+  gitlab: (query, limit) => searchUpstream('gitlab', query, limit),
+  codeberg: (query, limit) => searchUpstream('codeberg', query, limit),
   gitee: searchGitee,
-  modelscope: searchModelScope,
+  modelscope: (query, limit) => searchUpstream('modelscope', query, limit),
   npm: (query, limit) => searchPackageEcosystem('npm', query, limit),
   pypi: (query, limit) => searchPackageEcosystem('pypi', query, limit),
   crates: (query, limit) => searchPackageEcosystem('crates', query, limit),
@@ -374,43 +358,15 @@ export async function searchPlatform(platformId, query, limit) {
 }
 
 export async function radarPlatform(platformId) {
-  const date = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
-
-  if (platformId === 'github') {
-    const queries = [
-      `created:>${date} stars:>20`,
-      'topic:productivity stars:>200',
-      'topic:personal-finance stars:>100',
-      'topic:home-automation stars:>100',
-    ];
-    const results = await Promise.allSettled(queries.map((query, index) => searchGitHub(query, index === 0 ? 18 : 10)));
-    const projects = results.filter((result) => result.status === 'fulfilled').flatMap((result) => result.value);
-    if (!projects.length) throw new Error('GitHub radar unavailable');
-    return projects;
-  }
-
-  if (platformId === 'huggingface') {
-    const data = await fetchJson('https://huggingface.co/api/models?sort=trendingScore&direction=-1&limit=18&full=false');
-    return mapProjects(data, fromHuggingFace);
-  }
-
-  if (platformId === 'gitlab') {
-    const data = await fetchJson(`https://gitlab.com/api/v4/projects?visibility=public&order_by=star_count&sort=desc&last_activity_after=${date}T00:00:00Z&per_page=18&simple=false`);
-    return mapProjects(data, fromGitLab);
-  }
-
-  if (platformId === 'codeberg') {
-    const data = await fetchJson('https://codeberg.org/api/v1/repos/search?sort=updated&order=desc&limit=18');
-    return mapProjects(data.data || data, fromCodeberg);
-  }
-
   if (platformId === 'gitee') {
     return searchGitee('开源', 18, 'radar');
   }
 
-  if (platformId === 'modelscope') {
-    const data = await fetchJson('https://modelscope.cn/openapi/v1/models?sort=downloads&page_size=18', { headers: { Accept: 'application/json' } });
-    return mapProjects(data?.data?.models || data?.models || data?.data, fromModelScope);
+  if (['github', 'huggingface', 'gitlab', 'codeberg', 'modelscope'].includes(platformId)) {
+    const data = await fetchJson(`/api/upstream/radar?provider=${encodeURIComponent(platformId)}&limit=18`, { headers: { Accept: 'application/json' } });
+    const projects = Array.isArray(data?.projects) ? data.projects : [];
+    if (!data?.ok && !projects.length) throw platformDegraded(data?.degradedReason || '上游暂不可用', data?.cacheStatus === 'stale' ? '过期缓存' : '上游不可用');
+    return annotateUpstreamProjects(projects, data);
   }
 
   if (['npm', 'pypi', 'crates'].includes(platformId)) {

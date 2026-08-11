@@ -314,3 +314,16 @@
 - 测试：10套Node测试；软件包服务；对比器；Server三API；9平台桌面和390px移动端；实际8112服务、health、package status和index HTTP 200；真实上游未通过开发环境验证。
 - 下一项唯一任务：用户用完整备份升级Phase 0.4-B，在Windows分别测试npm、PyPI、crates.io和2至5项目对比，只修真实兼容问题。
 - 关键文件：`package-service.mjs`、`project-comparator.js`、`platform-adapters.js`、`server.mjs`、`app.js`、`index.html`、`styles.css`、四套新增/扩展测试与交接文件。
+
+## 2026-08-11 — OSS-0P verified artifact takeover and public OSS foundation
+
+- Current phase: OSS-0P — verified artifact takeover and public OSS foundation audit.
+- Artifact: ZIP `open-source-radar-phase-0.4-b.zip`, 150,410 bytes, SHA-256 `4fcd03e483196bd48e3c47f4e8d7e53c9ee96c5d8b89fb75613b42a55341ce3d`, exact match. Bundle SHA-256 `915f1c9184623e2284859c270f3db8b6a5d0e6ac57bf7104ffd01c2212597df3`, `git bundle verify` passed.
+- Git: recovered genuine Bundle history from `e60b3a0`; branch `oss/phase-0-public-readiness`; current committed HEAD before final handoff evidence `776c37b`; no tag, push, remote, merge, release, or public repository.
+- Completed: artifact provenance; upstream/source ledger; license boundary audit; naming decision; public runtime risk register; English README entry; CONTRIBUTING/SECURITY/CODE_OF_CONDUCT/CHANGELOG/ROADMAP; Issue/PR templates; secret-free CI; local Node regression; in-app browser smoke; local HTTP and Codex export smoke.
+- Tests: Node `v24.18.0` 10/10 suites passed; JavaScript syntax passed; bundled Python `3.12.13` syntax and JSON parsing passed; standalone `tests/browser_mock_test.py` not run because bundled Python lacks `playwright`; `git diff --check` passed.
+- Windows live source smoke: in-app browser English query `http client` returned GitHub 12, Hugging Face 10, GitLab 12, ModelScope 1, Codeberg 0, PyPI 0; npm and crates.io unavailable; Gitee returned fallback-only. Local Node package endpoints independently returned npm 502, PyPI 200/0, crates.io 502; this is not full all-source acceptance.
+- Known issues/risks: direct browser upstream calls lack public-beta rate-limit/cache/backoff hardening; package metrics differ by ecosystem; source/API terms need re-check before redistribution; no public maintenance/adoption evidence exists.
+- Readiness: internal heuristic `50/100 — NO`; functionality is not the main gap, public maintenance/adoption evidence is.
+- Workspace: final evidence updates to `HANDOFF.md`, `docs/PROJECT_STATE.json`, and this append-only log are unstaged and intentionally visible as dirty; generated Python cache was removed; no user runtime data was deleted.
+- Unique next task: implement and verify public-beta rate-limit, cache, backoff, and degraded-mode hardening for direct upstream calls without exposing browser tokens.

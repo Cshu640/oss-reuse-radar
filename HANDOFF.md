@@ -114,3 +114,15 @@ Phase 0.4-A.1已由用户在Windows真实环境验收：双击启动器、来源
 - Blockers: none for local documentation work. Public release remains blocked by live upstream acceptance, rate-limit hardening, and lack of public maintenance/adoption evidence.
 - Forbidden: no public repository, remote, push, release tag, release, PR, merge, MCP, cloud collector, payment, accounts, or new platform was created.
 - Next single task after this audit: implement and verify public-beta rate-limit/cache/degraded-mode hardening for direct upstream calls.
+
+## OSS-0P final verification snapshot (2026-08-11)
+
+- Current phase: OSS-0P complete for local public-foundation work; live-source limits remain explicit.
+- Branch/HEAD: `oss/phase-0-public-readiness` / `776c37b` (`docs: add public OSS readiness foundation`).
+- Completed: exact ZIP and Bundle verification; genuine history recovery; governance and CI; source/license audit; naming/risk/readiness documents; Node 10/10 regression; local HTTP smoke; in-app browser homepage/search/favorites/compare/detail/Trust/Codex checks; real English `http client` query.
+- Not completed: standalone Playwright Python browser mock because the available Python runtime lacks `playwright`; shell direct upstream calls because outbound network is unavailable; public-beta rate-limit implementation; public repository/release/adoption evidence; natural-time growth acceptance.
+- Current blockers: missing Playwright package for the standalone mock; network limitations for shell-level upstream verification; future public maintenance/adoption evidence.
+- Actual live result: browser query returned GitHub 12, Hugging Face 10, GitLab 12, ModelScope 1, Codeberg 0, PyPI 0; npm/crates.io unavailable; Gitee fallback-only. Local package endpoints returned npm 502, PyPI 200/0, crates.io 502.
+- Workspace/Git: current updates to this handoff and `docs/PROJECT_STATE.json`/`docs/HANDOFF_LOG.md` are intentionally unstaged final evidence; no tags, push, merge, remote, public repository, or release.
+- Prohibited actions honored: no MCP, new platform, cloud collector, payment, accounts, SaaS backend, broad UI redesign, public activity fabrication, push, or release.
+- Unique next task: implement and verify public-beta rate-limit, cache, backoff, and degraded-mode hardening for direct upstream calls without exposing browser tokens.

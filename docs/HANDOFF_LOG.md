@@ -363,10 +363,10 @@
 
 - Current phase/status: OSS-0Q.1;
   `windows_live_upstream_acceptance_passed_release_gate_ready`.
-- Branch/HEAD at commit time: `oss/phase-0-public-readiness` / `c3eea98`; the
-  final docs commit `docs: record OSS-0Q1 Windows live acceptance and public
-  beta release gate` is recorded in the post-commit evidence snapshot. No
-  remote, tag, push, merge, release, or public repository.
+- Branch/HEAD at the final evidence snapshot:
+  `oss/phase-0-public-readiness` / `078dae1` (`docs: record OSS-0Q1 Windows
+  live acceptance and public beta release gate`). No remote, tag, push,
+  merge, release, or public repository.
 - Environment: ordinary Windows PowerShell (user run) with
   `NODE_USE_ENV_PROXY=1`, `HTTP_PROXY`/`HTTPS_PROXY=http://127.0.0.1:7897`,
   `NO_PROXY=localhost,127.0.0.1,::1`; Windows win32-x64; Node 24.18.0;

@@ -164,12 +164,11 @@ Phase 0.4-A.1已由用户在Windows真实环境验收：双击启动器、来源
 
 - Current phase/status: OSS-0Q.1; Windows live upstream acceptance passed on
   a real user Windows network; `PUBLIC_BETA_RELEASE_GATE_READY = true`.
-- Branch/HEAD: `oss/phase-0-public-readiness` / `c3eea98` (the final docs
-  commit for this task, `docs: record OSS-0Q1 Windows live acceptance and
-  public beta release gate`, is recorded in the post-commit evidence
-  snapshot). Prior commits: harness `a30a06f`, OSS-0Q checkpoint `fe68af1`,
-  OSS-0Q.1 docs `c3eea98`. No tag, remote, push, merge, release, or public
-  repository exists.
+- Branch/HEAD: `oss/phase-0-public-readiness` / `078dae1` (`docs: record
+  OSS-0Q1 Windows live acceptance and public beta release gate`). Prior
+  commits: harness `a30a06f`, OSS-0Q checkpoint `fe68af1`, OSS-0Q.1 docs
+  `c3eea98`. No tag, remote, push, merge, release, or public repository
+  exists.
 - Environment: ordinary Windows PowerShell with `NODE_USE_ENV_PROXY=1`,
   `HTTP_PROXY`/`HTTPS_PROXY=http://127.0.0.1:7897`,
   `NO_PROXY=localhost,127.0.0.1,::1`; Windows win32-x64; Node 24.18.0;

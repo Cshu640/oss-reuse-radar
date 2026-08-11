@@ -87,13 +87,31 @@ const repo = (platform, index = 1, fullName = `demo/${platform}-tool-${index}`) 
 window.fetch = (input, options = {}) => {
   const url = typeof input === 'string' ? input : input.url;
   window.__requestedUrls.push(url);
-  if (url.includes('api.github.com')) return jsonResponse({ items: [repo('github', 1, 'demo/github-tool-1'), repo('github', 2, 'demo/github-tool-2')] });
-  if (url.includes('huggingface.co/api/models')) return jsonResponse([
-    { id: 'demo/github-tool-1', likes: 44, downloads: 4000, pipeline_tag: 'text-generation', library_name: 'transformers', tags: ['license:mit', 'npc', 'memory'], lastModified: '2026-07-28T00:00:00Z', createdAt: '2026-07-02T00:00:00Z', repository_url: 'https://github.com/demo/github-tool-1' },
-    { id: 'demo/hf-model', likes: 31, downloads: 900, pipeline_tag: 'text-generation', library_name: 'transformers', tags: ['license:apache-2.0', 'npc', 'memory'], lastModified: '2026-07-28T00:00:00Z', createdAt: '2026-07-02T00:00:00Z' }
-  ]);
-  if (url.includes('gitlab.com/api/v4/projects')) return jsonResponse([repo('gitlab', 1)]);
-  if (url.includes('codeberg.org/api/v1/repos/search')) return jsonResponse({ ok: true, data: [repo('codeberg', 1)] });
+  if (url.includes('/api/upstream/search') || url.includes('/api/upstream/radar')) {
+    const parsed = new URL(url, 'http://localhost');
+    const provider = parsed.searchParams.get('provider');
+    const upstreamMap = {
+      github: [
+        { id: 'github:demo/github-tool-1', platform: 'github', name: 'github-tool-1', owner: 'demo', description: 'GitHub productivity self-hosted game npc memory tool', url: 'https://github.com/demo/github-tool-1', repositoryUrl: 'https://github.com/demo/github-tool-1', avatar: '', stars: 121, forks: 11, language: 'TypeScript', license: 'MIT', updatedAt: '2026-07-28T00:00:00Z', createdAt: '2026-07-01T00:00:00Z', topics: ['productivity', 'npc', 'memory'] },
+        { id: 'github:demo/github-tool-2', platform: 'github', name: 'github-tool-2', owner: 'demo', description: 'GitHub productivity self-hosted game npc memory tool', url: 'https://github.com/demo/github-tool-2', repositoryUrl: 'https://github.com/demo/github-tool-2', avatar: '', stars: 122, forks: 12, language: 'TypeScript', license: 'MIT', updatedAt: '2026-07-28T00:00:00Z', createdAt: '2026-07-01T00:00:00Z', topics: ['productivity', 'npc', 'memory'] }
+      ],
+      huggingface: [
+        { id: 'huggingface:demo/github-tool-1', platform: 'huggingface', name: 'github-tool-1', owner: 'demo', description: '任务：text-generation。license:mit · npc · memory', url: 'https://huggingface.co/demo/github-tool-1', repositoryUrl: 'https://github.com/demo/github-tool-1', likes: 44, downloads: 4000, language: 'transformers', license: 'MIT', updatedAt: '2026-07-28T00:00:00Z', createdAt: '2026-07-02T00:00:00Z', topics: ['license:mit', 'npc', 'memory'] },
+        { id: 'huggingface:demo/hf-model', platform: 'huggingface', name: 'hf-model', owner: 'demo', description: '任务：text-generation。license:apache-2.0 · npc · memory', url: 'https://huggingface.co/demo/hf-model', repositoryUrl: '', likes: 31, downloads: 900, language: 'transformers', license: 'Apache-2.0', updatedAt: '2026-07-28T00:00:00Z', createdAt: '2026-07-02T00:00:00Z', topics: ['license:apache-2.0', 'npc', 'memory'] }
+      ],
+      gitlab: [
+        { id: 'gitlab:demo/gitlab-tool-1', platform: 'gitlab', name: 'gitlab-tool-1', owner: 'demo', description: 'GitLab productivity self-hosted game npc memory tool', url: 'https://gitlab.com/demo/gitlab-tool-1', repositoryUrl: 'https://gitlab.com/demo/gitlab-tool-1', avatar: '', stars: 121, forks: 11, language: '', license: 'MIT', updatedAt: '2026-07-28T00:00:00Z', createdAt: '2026-07-01T00:00:00Z', topics: ['productivity', 'npc', 'memory'] }
+      ],
+      codeberg: [
+        { id: 'codeberg:demo/codeberg-tool-1', platform: 'codeberg', name: 'codeberg-tool-1', owner: 'demo', description: 'Codeberg productivity self-hosted game npc memory tool', url: 'https://codeberg.org/demo/codeberg-tool-1', repositoryUrl: 'https://codeberg.org/demo/codeberg-tool-1', avatar: '', stars: 121, forks: 11, language: 'TypeScript', license: 'MIT', updatedAt: '2026-07-28T00:00:00Z', createdAt: '2026-07-01T00:00:00Z', topics: ['productivity', 'npc', 'memory'] }
+      ],
+      modelscope: [
+        { id: 'modelscope:demo/github-tool-1', platform: 'modelscope', name: 'github-tool-1', owner: 'demo', description: '任务：text-generation · npc-memory', url: 'https://modelscope.cn/models/demo/github-tool-1', repositoryUrl: 'https://github.com/demo/github-tool-1', avatar: '', likes: 22, downloads: 1200, language: 'PyTorch', license: 'MIT', updatedAt: '2026-07-28T00:00:00Z', createdAt: '2026-07-03T00:00:00Z', topics: ['text-generation', 'npc-memory'] }
+      ]
+    };
+    const projects = upstreamMap[provider] || [];
+    return jsonResponse({ ok: true, provider, data: projects, projects, cacheStatus: 'miss', degraded: false, degradedReason: null, fetchedAt: '2026-07-29T00:00:00Z', rateLimit: null });
+  }
   if (url.includes('/api/health')) return jsonResponse({ status: 'ok', version: '0.4-B', giteeProxy: true, history: true, insights: true, codexExport: true, identityCorrections: true, trust: true, backup: true, packages: true });
   if (url.includes('/api/identity/overrides')) { if (options.method === 'POST') window.__identityOverrides = JSON.parse(options.body); return jsonResponse(window.__identityOverrides); }
   if (url.includes('/api/trust/status')) return jsonResponse({ enabled: true, providers: ['OpenSSF Scorecard', 'deps.dev', 'OSV'] });
@@ -125,7 +143,6 @@ window.fetch = (input, options = {}) => {
     return jsonResponse({ projects, status: { projectCount: 8, sampleCount: 8, historyAgeHours: 2 } });
   }
   if (url.includes('/api/gitee/search')) return jsonResponse({ projects: [repo('gitee', 1)], source: 'gitee-official-search', warning: 'mock fallback' });
-  if (url.includes('modelscope.cn/openapi/v1/models')) return jsonResponse({ success: true, data: { models: [{ id: 'demo/github-tool-1', likes: 22, downloads: 1200, license: 'MIT', tasks: ['text-generation', 'npc-memory'], library: 'PyTorch', repository_url: 'https://github.com/demo/github-tool-1', last_modified: '2026-07-28T00:00:00Z', created_at: '2026-07-03T00:00:00Z' }] } });
   return Promise.reject(new Error(`Unmocked URL: ${url}`));
 };
 </script>

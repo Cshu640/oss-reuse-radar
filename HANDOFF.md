@@ -245,3 +245,45 @@ Phase 0.4-A.1已由用户在Windows真实环境验收：双击启动器、来源
   `docs/RELEASE_NOTES_v0.1.0.md`, `docs/PUBLIC_NAMING_DECISION.md`,
   `docs/ARTIFACT_PROVENANCE.md`, `LICENSE`, `.github/workflows/ci.yml`,
   `tests/browser_mock_test.py`, `docs/PROJECT_STATE.json`.
+
+## OSS-0S User-approved GitHub Public Launch (2026-08-11)
+
+- Current phase/status: OSS-0S; user approvals frozen; launch started but
+  blocked at the GitHub identity gate: `GITHUB_OWNER_IDENTITY_BLOCKED`.
+- Approved decisions: owner `Cshu640`, slug `oss-reuse-radar`, accept the
+  early provenance path history, security channel GitHub Private
+  Vulnerability Reporting, actual public launch approved.
+- Branch/HEAD: `oss/phase-0-public-readiness` / `412a726` (`docs: freeze
+  OSS-0R public release approval handoff`). The OSS-0R evidence trio was
+  frozen in that independent local commit and the working tree was clean
+  before any GitHub check.
+- Identity gate (HARD BLOCKER): `gh auth status` shows `Cshu640` as the
+  default account with an invalid token; `gh api user --jq .login` did not
+  return `Cshu640`; `gh repo view Cshu640/oss-reuse-radar` returned HTTP 401.
+  No repository was created, no remote added, and no push/tag/release ran.
+  No PAT was created and no credential was printed.
+- Final local recheck before launch: `git diff --check` passed; full-history
+  secret scan passed (only the deliberately fake test token
+  `ghp_fake_server_only_1234567890` plus doc references); privacy scan shows
+  only the user-approved early provenance desktop path in old
+  `docs/PROJECT_STATE.json` commits (`270961e`, `f2a10a7`); no new private
+  path or credential was introduced.
+- No local `main` exists yet; remote, tag, push, merge, release, and public
+  repository all remain absent.
+- Screenshots: not attempted; launch is blocked before capture.
+- Unique next task: the user re-authenticates GitHub CLI as `Cshu640`
+  (`gh auth login -h github.com`), then rerun OSS-0S and resume from the
+  identity gate through repository creation, push, settings, public CI,
+  `v0.1.0` tag/release, evidence, and handoff.
+- Key files: this handoff, `docs/PROJECT_STATE.json`,
+  `docs/HANDOFF_LOG.md`, `docs/PUBLIC_RELEASE_GATE.md`,
+  `docs/PUBLIC_RELEASE_MANIFEST.json`, `docs/GITHUB_PUBLIC_REPOSITORY_PLAN.md`,
+  and the task file
+  `C:\Users\28293\Desktop\临时下载\水印图\CODEX_TASK_OPEN_SOURCE_RADAR_OSS_0S_GITHUB_PUBLIC_LAUNCH_Cshu640.md`.
+
+- Identity gate passed: user re-authenticated GitHub CLI; `gh api user
+  --jq .login` now returns `Cshu640` (token supplied via `~/.codex/.env`).
+  `GITHUB_OWNER_IDENTITY_BLOCKED` is cleared. `gh repo view
+  Cshu640/oss-reuse-radar` reports the repository does not exist, so the
+  Repository Existence Gate allows creation. Launch resumes with the local
+  freeze commit `412a726` preserved; no duplicate freeze commit is created.

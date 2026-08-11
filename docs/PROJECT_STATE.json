@@ -1,8 +1,8 @@
 {
-  "phase": "OSS-0R",
-  "status": "public_beta_release_gate_complete_pending_user_approval",
+  "phase": "OSS-0S",
+  "status": "github_public_launch_in_progress",
   "branch": "oss/phase-0-public-readiness",
-  "head": "e0eb99d",
+  "head": "412a726",
   "working_tree": "dirty",
   "staged": false,
   "committed": true,
@@ -11,6 +11,17 @@
   "merged": false,
   "remote": false,
   "public_repo": false,
+  "public_launch_approval": {
+    "github_owner": "Cshu640",
+    "repo_slug": "oss-reuse-radar",
+    "accept_early_provenance_path_history": true,
+    "security_channel": "github_private_vulnerability_reporting",
+    "public_launch_approved": true,
+    "oss_0r_freeze_commit": "412a726"
+  },
+  "identity_gate_passed": true,
+  "identity_gate_login": "Cshu640",
+  "repository_existence_gate": "repo_not_found_can_create",
   "oss_0p_handoff": {
     "frozen": true,
     "freeze_commit": "f2a10a7",
@@ -104,6 +115,9 @@
     "Approve the actual public launch"
   ],
   "completed": [
+    "User approval frozen (owner Cshu640, slug oss-reuse-radar, provenance history accepted, Private Vulnerability Reporting, launch approved)",
+    "OSS-0R evidence frozen in a dedicated docs commit (412a726)",
+    "GitHub identity gate passed: gh api user --jq .login returned Cshu640",
     "OSS-0Q.1 evidence frozen in a dedicated docs commit (857f8af)",
     "MIT license completed to the standard full text",
     "Browser mock and CI made portable: Node 24, Playwright/Chromium installed in CI, graceful skip without Playwright, portable screenshot path",
@@ -118,15 +132,13 @@
     "No remote, push, tag, merge, release, or public repository created"
   ],
   "not_completed": [
+    "GitHub CLI authentication for owner Cshu640 (blocked: token invalid)",
     "Real UI screenshots for the public README (pending capture from a real local run)",
-    "User approval for repository owner, provenance-history exposure, security contact, and launch",
     "Actual public launch: create oss-reuse-radar, push genuine history, establish main, tag v0.1.0, publish Release, enable settings, verify public CI",
     "Authenticated GitHub live verification (non-blocking)",
     "Natural-time growth and public maintenance/adoption evidence"
   ],
-  "blocked_by": [
-    "User approval before any public launch action"
-  ],
+  "blocked_by": [],
   "tests": [
     "node v24.18.0 node --test tests/*.mjs: 30 passed, 0 failed",
     "JavaScript/MJS syntax checks: passed",

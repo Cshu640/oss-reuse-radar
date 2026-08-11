@@ -1,11 +1,16 @@
 {
   "release": "v0.1.0",
-  "release_candidate": true,
+  "release_candidate": false,
+  "released": true,
   "public_release_go": true,
-  "branch": "oss/phase-0-public-readiness",
-  "head": "",
-  "license": "MIT",
+  "branch": "main",
+  "head": "0fe3906ba681eee5167b56d8995bdd85fe7d8499",
+  "repo_owner": "Cshu640",
   "repo_slug": "oss-reuse-radar",
+  "public_url": "https://github.com/Cshu640/oss-reuse-radar",
+  "release_url": "https://github.com/Cshu640/oss-reuse-radar/releases/tag/v0.1.0",
+  "public_ci": "passed",
+  "license": "MIT",
   "display_name": "OpenRadar",
   "tests": {
     "node": "30/30",
@@ -30,17 +35,14 @@
     "Early provenance history contains the user's local desktop path and is generalized in current docs",
     "No real UI screenshots are committed yet"
   ],
-  "required_user_decisions": [
-    "Approve repository owner and oss-reuse-radar slug",
-    "Approve public exposure of the early provenance desktop path or authorize a later history rewrite",
-    "Choose security contact: GitHub Private Vulnerability Reporting (recommended) or an approved public email",
-    "Approve the actual public launch"
-  ],
-  "forbidden_until_approved": [
-    "create_remote",
-    "push",
-    "tag",
-    "github_release",
-    "make_public"
-  ]
+  "user_decisions": {
+    "owner": "Cshu640",
+    "repo_slug": "oss-reuse-radar",
+    "accept_early_provenance_path_history": true,
+    "security_channel": "github_private_vulnerability_reporting",
+    "public_launch_approved": true
+  },
+  "launch_evidence": "docs/PUBLIC_LAUNCH_EVIDENCE.md",
+  "private_vulnerability_reporting": "pending_manual_enablement",
+  "screenshots": "deferred_environment_limit"
 }

@@ -2,6 +2,21 @@
 
 This file records truthful project milestones. It is not a list of public releases.
 
+## v0.1.0 — 2026-08-11 (public beta)
+
+- User-approved public launch completed: `Cshu640/oss-reuse-radar` is public
+  with the genuine recovered history, `main` at `0fe3906`, and a public CI
+  pass on the released commit.
+- Public `v0.1.0` release published from `docs/RELEASE_NOTES_v0.1.0.md`;
+  annotated tag `v0.1.0` points to the same commit as `main`.
+- Fixed the first public CI failure: the browser mock did not follow the
+  OSS-0Q migration to `/api/upstream/*`; the mock and its modelscope assertion
+  were aligned with the real routes.
+- Repository settings: Issues on, Wiki/Projects/Discussions off, squash merge
+  and auto-delete on, secret scanning and push protection enabled. Private
+  Vulnerability Reporting remains pending a one-click manual enablement.
+- Real UI screenshots remain deferred; none were faked.
+
 ## Unreleased — OSS-0R v0.1.0 release candidate
 
 - Windows live upstream acceptance passed on a real user network: GitHub,

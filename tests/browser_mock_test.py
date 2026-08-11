@@ -9,12 +9,17 @@ from __future__ import annotations
 
 import json
 import re
+import tempfile
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+try:
+    from playwright.sync_api import sync_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
 
 ROOT = Path(__file__).resolve().parents[1]
-SCREENSHOT = Path('/mnt/data/open-source-radar-phase-0.4-b-browser.png')
+SCREENSHOT = Path(tempfile.gettempdir()) / 'open-source-radar-phase-0.4-b-browser.png'
 
 
 def make_inline_module(source: str) -> str:
@@ -238,9 +243,11 @@ def assert_result(result: dict, mobile: bool = False) -> None:
 
 
 def main() -> None:
+    if not PLAYWRIGHT_AVAILABLE:
+        print('SKIPPED: playwright module not installed. Install with "pip install playwright" and "python -m playwright install chromium" to run the browser mock.')
+        return
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(
-            executable_path='/usr/bin/chromium',
             headless=True,
             args=['--no-sandbox', '--disable-dev-shm-usage'],
         )

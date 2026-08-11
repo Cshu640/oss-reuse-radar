@@ -126,3 +126,21 @@ Phase 0.4-A.1已由用户在Windows真实环境验收：双击启动器、来源
 - Workspace/Git: current updates to this handoff and `docs/PROJECT_STATE.json`/`docs/HANDOFF_LOG.md` are intentionally unstaged final evidence; no tags, push, merge, remote, public repository, or release.
 - Prohibited actions honored: no MCP, new platform, cloud collector, payment, accounts, SaaS backend, broad UI redesign, public activity fabrication, push, or release.
 - Unique next task: implement and verify public-beta rate-limit, cache, backoff, and degraded-mode hardening for direct upstream calls without exposing browser tokens.
+
+## OSS-0Q public beta upstream hardening snapshot (2026-08-11)
+
+- Current phase: OSS-0Q implementation complete for the local gateway foundation; full Windows live upstream acceptance remains open.
+- Branch/HEAD: `oss/phase-0-public-readiness` / `270961e` (`feat: harden upstream access for public beta`).
+- OSS-0P freeze: dedicated handoff commit `f2a10a7`; exact artifact and Bundle evidence remain preserved.
+- Completed: Open Source Scout and license/dependency decision; browser normal path migrated to same-origin `/api/upstream/search` and `/api/upstream/radar`; server gateway with bounded memory cache, ETag/Last-Modified, in-flight dedupe, eviction, timeout, retry/backoff, Retry-After, GitHub reset cooldown, provider/global concurrency, server-only optional GitHub auth, sanitized contract, package integration, Gitee fallback contract, UI status badges, tests and risk/ledger docs.
+- Actual tests: Node `v24.18.0` `node --test tests/*.mjs` passed 30/30; gateway suite passed 20/20; JS/MJS syntax passed; manifest/state/ledger JSON passed; `git diff --check` passed; in-process local HTTP smoke passed health/home/upstream/Gitee with HTTP 200; Playwright Python mock not run because bundled Python lacks `playwright`.
+- Cache validation: fresh hit avoided the second upstream call; expired entries revalidated with ETag/304; concurrent requests deduped; stale-if-error served bounded non-live data; stale max-age refusal and bounded eviction passed.
+- Rate-limit/backoff validation: 5xx retry bounded to two retries; 429 obeyed Retry-After; GitHub primary remaining=0 entered reset cooldown without hammering; GitHub secondary Retry-After passed; ordinary 400/401/404/422 did not retry.
+- Secret boundary validation: static secret-pattern scan passed; browser/static direct-upstream scan passed; fake server-only token appeared only in injected test request and not in response/status/cache; `.env.example` contains an empty placeholder only.
+- Not completed: full Windows live acceptance for all providers; natural-time growth; public repository/release/issue/PR/adoption evidence; persistent disk cache (intentionally not selected).
+- Current blockers: shell outbound upstream access is restricted; bundled Python lacks Playwright; public maintenance/adoption requires future approved public repository and external users.
+- Public runtime risk changes: browser direct calls mitigated for normal path; GitHub rate limits, package reliability, and upstream instability partially mitigated; Gitee ambiguity mitigated; public governance/adoption remains open. Readiness remains `50/100 — NO`; no adoption points were added.
+- Workspace/Git: feature commit `270961e` is committed; final state/log updates are intentionally the only current dirty files before the final handoff commit; no staging, tag, push, merge, remote, release, or public repository.
+- Forbidden: no paid API, new platform, browser token, cloud collector, automatic Codex execution, fake live/adoption evidence, push, merge, tag, release, or broad redesign.
+- Unique next task: run full Windows live acceptance for the local server across all supported sources and record only observed provider states.
+- Key files: `upstream-gateway.mjs`, `upstream-cache-store.mjs`, `platform-adapters.js`, `package-service.mjs`, `server.mjs`, `app.js`, `tests/upstream_gateway_test.mjs`, `docs/UPSTREAM_GATEWAY_DECISION.md`, `docs/PUBLIC_RUNTIME_RISK_REGISTER.md`, `docs/PROJECT_STATE.json`.

@@ -254,7 +254,7 @@ def assert_result(result: dict, mobile: bool = False) -> None:
         assert result['primaryBackground'] != 'rgb(99, 234, 255)', result
 
     gitee_urls = [url for url in result['requestedUrls'] if '/api/gitee/search' in url]
-    modelscope_urls = [url for url in result['requestedUrls'] if 'modelscope.cn/openapi/v1/models' in url]
+    modelscope_urls = [url for url in result['requestedUrls'] if '/api/upstream/search?provider=modelscope' in url]
     assert any('%E9%80%82%E5%90%88%E7%BD%91%E9%A1%B5%E6%B8%B8%E6%88%8F' in url for url in gitee_urls), gitee_urls
     assert any('%E9%80%82%E5%90%88%E7%BD%91%E9%A1%B5%E6%B8%B8%E6%88%8F' in url for url in modelscope_urls), modelscope_urls
 

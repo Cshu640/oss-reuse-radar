@@ -1,19 +1,19 @@
 {
-  "release": "v0.1.0",
-  "release_candidate": false,
-  "released": true,
+  "release": "v0.2.0",
+  "release_candidate": true,
+  "released": false,
   "public_release_go": true,
-  "branch": "main",
-  "head": "0fe3906ba681eee5167b56d8995bdd85fe7d8499",
+  "branch": "release/v0.2.0",
+  "head": "29c70dc3cb3b0fe4d5e34eac10d23958b55dc6ae",
   "repo_owner": "Cshu640",
   "repo_slug": "oss-reuse-radar",
   "public_url": "https://github.com/Cshu640/oss-reuse-radar",
-  "release_url": "https://github.com/Cshu640/oss-reuse-radar/releases/tag/v0.1.0",
+  "release_url": "https://github.com/Cshu640/oss-reuse-radar/releases/tag/v0.2.0",
   "public_ci": "passed",
   "license": "MIT",
   "display_name": "OpenRadar",
   "tests": {
-    "node": "30/30",
+    "node": "31/31",
     "windows_live_acceptance": "passed",
     "secret_scan_current_tree": "passed",
     "secret_scan_git_history": "passed",
@@ -22,7 +22,7 @@
     "readme_gate": "passed",
     "ci_gate": "passed",
     "community_gate": "passed_with_user_decision",
-    "screenshot_gate": "not_run"
+    "screenshot_gate": "passed"
   },
   "known_limitations": [
     "Gitee remains fallback-only and is not counted as live or growth data",
@@ -33,7 +33,11 @@
     "Trust signals are public risk signals, not certification or legal conclusions",
     "Upstream availability varies by network; proxy configuration may be needed",
     "Early provenance history contains the user's local desktop path and is generalized in current docs",
-    "No real UI screenshots are committed yet"
+    "Private Vulnerability Reporting pending manual enablement",
+    "Gitee fallback-only",
+    "Memory cache resets on restart",
+    "Ollama optional/local availability limitations",
+    "External adoption/community evidence still early"
   ],
   "user_decisions": {
     "owner": "Cshu640",
@@ -42,7 +46,7 @@
     "security_channel": "github_private_vulnerability_reporting",
     "public_launch_approved": true
   },
-  "launch_evidence": "docs/PUBLIC_LAUNCH_EVIDENCE.md",
+  "launch_evidence": "docs/RELEASE_NOTES_v0.2.0.md",
   "private_vulnerability_reporting": "pending_manual_enablement",
   "screenshots": "deferred_environment_limit"
 }

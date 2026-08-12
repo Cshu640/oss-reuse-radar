@@ -2,6 +2,24 @@
 
 This file records truthful project milestones. It is not a list of public releases.
 
+## v0.2.0 — 2026-08-12 (bilingual public beta)
+
+- Complete English / Simplified Chinese UI with a visible language switch,
+  locale persistence, and saved > browser > English resolution.
+- Locale-independent category machine IDs with legacy Chinese category
+  migration; favorites, compare, backup, and import compatibility preserved.
+- Bilingual rule-based insights, locale-aware AI prompts, bilingual AI status
+  text, and Use-case Fit / 适用场景匹配度 labels.
+- Locale-aware insight cache (`projectId::locale`) with legacy-cache
+  compatibility; language switches never show stale insights from another
+  language.
+- Real English and Simplified Chinese README screenshots and refreshed
+  bilingual README navigation.
+- Compare recommendation localized per UI language; browser-mock/CI fixes
+  from the OSS-0T.4 public CI.
+- Public beta status and onboarding copy cleaned up; no fabricated adoption
+  or benchmark claims.
+
 ## v0.1.0 — 2026-08-11 (public beta)
 
 - User-approved public launch completed: `Cshu640/oss-reuse-radar` is public

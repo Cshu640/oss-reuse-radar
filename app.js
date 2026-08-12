@@ -2,6 +2,7 @@ import { platformCatalog, platformIds, radarPlatform, searchPlatform } from './p
 import { deduplicationStats, entitiesOverlap, entityLookupIds, findEntityById, mergeProjectEntities, projectSources } from './project-identity.js';
 import { buildCodexResearchTask, codexExportSlug } from './codex-packet.js';
 import { compareProjects } from './project-comparator.js';
+import { CATEGORY_IDS, applyDocumentLanguage, categoryLabel, getSavedLocale, normalizeCategory, resolveLocale } from './i18n/index.js';
 
 const FAVORITES_KEY = 'openradar:favorites:v1';
 const RADAR_CACHE_KEY = 'openradar:radar-cache:v10';
@@ -18,37 +19,22 @@ const HISTORY_COPY = {
 };
 const RADAR_CACHE_TTL = 15 * 60 * 1000;
 
-const categories = [
-  '全部',
-  '游戏开发',
-  '游戏AI与NPC',
-  '3D与动画',
-  'AI图片视频',
-  'Agent与MCP',
-  'Web与App',
-  '微信生态',
-  '教育产品',
-  '内容创作',
-  '办公效率',
-  '生活工具',
-  '商业应用底座',
-  '开发组件',
-];
+const categories = CATEGORY_IDS;
 
 const categoryRules = [
-  ['游戏AI与NPC', ['npc', 'game ai', 'behavior tree', 'game agent', 'character memory', 'game memory', 'dialogue system']],
-  ['3D与动画', ['3d', 'rigging', 'animation', 'motion capture', 'retargeting', 'blender', 'mesh', 'avatar']],
-  ['AI图片视频', ['text-to-image', 'image generation', 'video generation', 'diffusion', 'computer vision', 'image edit', 'video edit']],
-  ['Agent与MCP', ['agent', 'mcp', 'codex', 'claude code', 'multi-agent', 'tool calling', 'rag', 'llm workflow']],
-  ['微信生态', ['wechat', 'mini program', 'miniprogram', '小程序', '小游戏']],
-  ['教育产品', ['education', 'learning', 'tutor', 'children', 'school', 'quiz', 'course', 'flashcard']],
-  ['内容创作', ['creator', 'content', 'newsletter', 'podcast', 'audio editor', 'social media', 'subtitle', 'transcription']],
-  ['办公效率', ['office', 'productivity', 'document', 'pdf', 'ocr', 'spreadsheet', 'presentation', 'calendar', 'email', 'meeting', 'notes', 'knowledge base', 'kanban', 'project management', 'task management', 'collaboration', 'file manager', 'markdown editor']],
-  ['生活工具', ['personal finance', 'budget', 'expense', 'health', 'fitness', 'sleep', 'recipe', 'meal planner', 'shopping list', 'travel', 'trip planner', 'itinerary', 'home automation', 'smart home', 'photo management', 'media server', 'password manager', 'habit', 'journal', 'family', 'parenting', 'pet', 'grocery']],
-  ['商业应用底座', ['saas', 'crm', 'erp', 'ecommerce', 'e-commerce', 'billing', 'invoice', 'booking', 'marketplace', 'customer support', 'admin dashboard', 'multi-tenant', 'inventory management', 'point of sale']],
-  ['开发组件', ['npm', 'pypi', 'crates.io', 'package', 'library', 'sdk', 'framework', 'plugin', 'middleware', 'dependency', 'component']],
-  ['游戏开发', ['game', 'godot', 'phaser', 'pixi', 'roguelike', 'rpg', 'game engine', 'level editor', 'procedural generation']],
-  ['Web与App', ['typescript', 'javascript', 'react', 'next.js', 'web app', 'pwa', 'mobile app', 'desktop app', 'frontend', 'backend']],
+  ['game-ai-npc', ['npc', 'game ai', 'behavior tree', 'game agent', 'character memory', 'game memory', 'dialogue system']],
+  ['three-d-animation', ['3d', 'rigging', 'animation', 'motion capture', 'retargeting', 'blender', 'mesh', 'avatar']],
+  ['ai-image-video', ['text-to-image', 'image generation', 'video generation', 'diffusion', 'computer vision', 'image edit', 'video edit']],
+  ['agent-mcp', ['agent', 'mcp', 'codex', 'claude code', 'multi-agent', 'tool calling', 'rag', 'llm workflow']],
+  ['wechat-ecosystem', ['wechat', 'mini program', 'miniprogram', '小程序', '小游戏']],
+  ['education', ['education', 'learning', 'tutor', 'children', 'school', 'quiz', 'course', 'flashcard']],
+  ['content-creation', ['creator', 'content', 'newsletter', 'podcast', 'audio editor', 'social media', 'subtitle', 'transcription']],
+  ['productivity', ['office', 'productivity', 'document', 'pdf', 'ocr', 'spreadsheet', 'presentation', 'calendar', 'email', 'meeting', 'notes', 'knowledge base', 'kanban', 'project management', 'task management', 'collaboration', 'file manager', 'markdown editor']],
+  ['life-tools', ['personal finance', 'budget', 'expense', 'health', 'fitness', 'sleep', 'recipe', 'meal planner', 'shopping list', 'travel', 'trip planner', 'itinerary', 'home automation', 'smart home', 'photo management', 'media server', 'password manager', 'habit', 'journal', 'family', 'parenting', 'pet', 'grocery']],
+  ['business-foundation', ['saas', 'crm', 'erp', 'ecommerce', 'e-commerce', 'billing', 'invoice', 'booking', 'marketplace', 'customer support', 'admin dashboard', 'multi-tenant', 'inventory management', 'point of sale']],
+  ['dev-components', ['npm', 'pypi', 'crates.io', 'package', 'library', 'sdk', 'framework', 'plugin', 'middleware', 'dependency', 'component']],
+  ['game-development', ['game', 'godot', 'phaser', 'pixi', 'roguelike', 'rpg', 'game engine', 'level editor', 'procedural generation']],
+  ['web-app', ['typescript', 'javascript', 'react', 'next.js', 'web app', 'pwa', 'mobile app', 'desktop app', 'frontend', 'backend']],
 ];
 
 const useTypeLabels = {
@@ -214,7 +200,8 @@ const state = {
   rawResults: [],
   results: [],
   favorites: loadFavorites().map(normalizeProject),
-  category: '全部',
+  category: 'all',
+  locale: resolveLocale({ saved: getSavedLocale(localStorage), languages: navigator.languages || [navigator.language] }),
   period: 'today',
   install: null,
   lastSearchPlan: null,
@@ -466,7 +453,7 @@ function projectText(project) {
 
 function classifyCategory(project) {
   const text = projectText(project);
-  let bestCategory = 'Web与App';
+  let bestCategory = 'web-app';
   let bestScore = 0;
 
   for (const [name, terms] of categoryRules) {
@@ -515,7 +502,7 @@ function normalizeProject(project) {
     ? [...new Set(normalized.sourcePlatforms.filter(Boolean))]
     : [normalized.platform].filter(Boolean);
   normalized.sourceCount = Number(normalized.sourceCount || normalized.sourceProjects?.length || 1);
-  normalized.category = normalized.category || classifyCategory(normalized);
+  normalized.category = normalizeCategory(normalized.category || classifyCategory(normalized));
   normalized.useTypes = inferUseTypes(normalized);
   return normalized;
 }
@@ -636,7 +623,7 @@ function commercialFriendly(license = '') {
 }
 
 function rulePlainSummary(project) {
-  const category = project.category || classifyCategory(project);
+  const category = categoryLabel(project.category || classifyCategory(project), state.locale);
   const description = String(project.description || '').replace(/[。.!！]+$/u, '').trim();
   const useTypes = inferUseTypes(project);
   const mode = useTypes.includes('direct')
@@ -740,7 +727,7 @@ function projectCard(project, saved = false, showGrowth = false) {
     <div class="plain-summary ${insight?.source === 'ollama' ? 'ai' : 'rule'}"><span>${escapeHtml(insightLabel)}</span><p>${escapeHtml(plainSummary)}</p></div>
     <div class="badges">
       <span class="badge platform">${escapeHtml(platformLabel)}</span>
-      <span class="badge">${escapeHtml(project.category || classifyCategory(project))}</span>
+    <span class="badge">${escapeHtml(categoryLabel(project.category || classifyCategory(project), state.locale))}</span>
       ${project.language ? `<span class="badge">${escapeHtml(project.language)}</span>` : ''}
       <span class="badge ${commercialFriendly(project.license) ? 'good' : 'warn'}">${escapeHtml(project.license || '许可证待核查')}</span>
     </div>
@@ -1059,7 +1046,7 @@ async function importFullBackupFile(file) {
     localStorage.setItem(COMPARE_KEY, JSON.stringify(state.compareItems));
     persistIdentityLocal();
     const settings = clientState.settings || {};
-    if (categories.includes(settings.category)) state.category = settings.category;
+    state.category = normalizeCategory(settings.category);
     if (HISTORY_COPY[settings.period]) state.period = settings.period;
     if ([...els.platform.options].some((option) => option.value === settings.platform)) els.platform.value = settings.platform;
     if ([...els.license.options].some((option) => option.value === settings.license)) els.license.value = settings.license;
@@ -1136,7 +1123,7 @@ function renderDetail() {
       <div><em>UNIFIED OPEN-SOURCE PROFILE</em><div class="detail-title-row"><h1>${escapeHtml(project.name)}</h1><button class="star ${favorite ? 'saved' : ''}" data-favorite="${escapeHtml(projectKey(project))}">${favorite ? '★' : '☆'}</button></div><p>${escapeHtml(project.owner || '未知作者')} · ${project.sourceCount || 1} 个平台来源 · 更新于${escapeHtml(timeAgo(project.updatedAt))}</p><button class="detail-compare ${comparedProject(project) ? 'active' : ''}" data-detail-compare>${comparedProject(project) ? '✓ 已加入项目对比' : '＋ 加入项目对比'}</button></div>
       <div class="detail-score"><span>综合潜力</span><b>${potentialScore(project)}</b></div>
     </article>
-    <div class="detail-badges"><span class="badge">${escapeHtml(project.category || classifyCategory(project))}</span>${useBadges}${languages.map((language) => `<span class="badge">${escapeHtml(language)}</span>`).join('')}${licenseVariants.map((license) => `<span class="badge ${commercialFriendly(license) ? 'good' : 'warn'}">${escapeHtml(license)}</span>`).join('')}</div>
+  <div class="detail-badges"><span class="badge">${escapeHtml(categoryLabel(project.category || classifyCategory(project), state.locale))}</span>${useBadges}${languages.map((language) => `<span class="badge">${escapeHtml(language)}</span>`).join('')}${licenseVariants.map((license) => `<span class="badge ${commercialFriendly(license) ? 'good' : 'warn'}">${escapeHtml(license)}</span>`).join('')}</div>
     ${topics.length ? `<div class="detail-topics">${topics.map((topic) => `<span>${escapeHtml(topic)}</span>`).join('')}</div>` : ''}
     <section class="detail-section"><div class="section-title"><div><h2>统一中文情报 ${insight?.source === 'ollama' ? provenanceBadge('ai') : provenanceBadge('rule')}</h2><p>同一项目的多平台来源合并后，只保留一张完整情报卡。</p></div><button data-analyze="${escapeHtml(projectKey(project))}">${insight ? '查看/更新中文解读' : '生成中文解读'}</button></div>${detailInsightSections(project, insight)}</section>
     <section class="detail-section trust-panel"><div class="section-title"><div><h2>安全与可信度</h2><p>免费按需查询OpenSSF Scorecard、deps.dev与OSV；自动结果只用于风险筛查。</p></div><button data-trust ${state.trustLoadingId === projectKey(project) ? 'disabled' : ''}>${state.trustLoadingId === projectKey(project) ? '审计中…' : (trust ? '重新审计' : '运行免费审计')}</button></div>${renderTrustPanel(project)}</section>
@@ -1372,13 +1359,13 @@ async function auditCompareItems() {
 
 function renderCategories() {
   els.categories.innerHTML = categories
-    .map((name) => `<button class="category ${name === state.category ? 'active' : ''}" data-category="${name}">${name}</button>`)
+    .map((id) => `<button class="category ${id === state.category ? 'active' : ''}" data-category="${id}">${categoryLabel(id, state.locale)}</button>`)
     .join('');
 }
 
 function filteredProjects() {
   let projects = [...state.projects];
-  if (state.category !== '全部') projects = projects.filter((project) => (project.category || classifyCategory(project)) === state.category);
+  if (state.category !== 'all') projects = projects.filter((project) => normalizeCategory(project.category || classifyCategory(project)) === state.category);
   if (els.platform.value !== 'all') projects = projects.filter((project) => entitySources(project).some((source) => source.platform === els.platform.value));
   if (els.license.value === 'commercial') projects = projects.filter((project) => commercialFriendly(project.license));
   if (els.license.value === 'unknown') projects = projects.filter((project) => !project.license || /待核查|unknown|other/i.test(project.license));
@@ -1608,7 +1595,7 @@ function renderInsightDetails(project, insight, { loading = false, error = '' } 
   const value = insight || {
     summary: rulePlainSummary(project),
     whatItDoes: project.description || '项目简介不足，需要阅读README进一步判断。',
-    bestFor: `适合关注${project.category || classifyCategory(project)}、准备做技术选型或寻找开源底座的人。`,
+    bestFor: `适合关注${categoryLabel(project.category || classifyCategory(project), state.locale)}、准备做技术选型或寻找开源底座的人。`,
     useMode: inferUseTypes(project).map((type) => useTypeLabels[type] || type).join('；'),
     commercial: commercialFriendly(project.license)
       ? `${project.license}通常较适合商业使用，但仍需复核许可证原文和第三方素材。`
@@ -1959,6 +1946,7 @@ async function detectRuntimeMode() {
 }
 
 function init() {
+  applyDocumentLanguage(document, state.locale);
   detectRuntimeMode();
   void loadInsightStatus(false).then(() => loadCachedInsights([...state.projects, ...state.favorites]));
   renderCategories();

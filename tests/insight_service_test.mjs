@@ -50,7 +50,8 @@ const fetchImpl = async (url, options = {}) => {
     assert.equal(body.keep_alive, 0);
     assert.equal(body.options.temperature, 0);
     assert.equal(body.format.type, 'object');
-    assert.match(body.messages[1].content, /Windows电脑/);
+    assert.doesNotMatch(body.messages[1].content, /Windows电脑|NVIDIA|8GB/);
+    assert.match(body.messages[1].content, /通用开源使用者与开发者/);
     assert.match(body.messages[1].content, /README节选/);
     return new Response(JSON.stringify({
       message: {

@@ -17,6 +17,8 @@ import {
   setSavedLocale,
   t,
 } from '../i18n/index.js';
+import { en } from '../i18n/en.js';
+import { zhCN } from '../i18n/zh-CN.js';
 import { InsightStore } from '../insight-store.mjs';
 import { createInsightService, projectFingerprint, ruleBasedInsight } from '../insight-service.mjs';
 import { createOpenRadarServer } from '../server.mjs';
@@ -68,6 +70,21 @@ assert.equal(t('category.all', 'zh-CN'), '全部');
 assert.equal(t('category.all', 'en'), 'All');
 assert.equal(t('missing.deep.key', 'zh-CN'), 'missing.deep.key');
 assert.equal(t('useType.direct', 'en'), 'Install and use directly');
+
+// Both locale resources expose the same key tree (no untranslated keys).
+function flattenKeys(node, prefix = '') {
+  return Object.entries(node).flatMap(([key, value]) => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    return value && typeof value === 'object' && !Array.isArray(value) ? flattenKeys(value, path) : [path];
+  });
+}
+const enKeys = flattenKeys(en).sort();
+const zhKeys = flattenKeys(zhCN).sort();
+assert.deepEqual(enKeys, zhKeys, 'en and zh-CN translation keys must match');
+for (const key of enKeys) {
+  assert.notEqual(t(key, 'en'), key, `en missing translation for ${key}`);
+  assert.notEqual(t(key, 'zh-CN'), key, `zh-CN missing translation for ${key}`);
+}
 
 // Category ids are stable machine values, display text comes from resources.
 for (const id of CATEGORY_IDS) assert.equal(normalizeCategory(id), id);

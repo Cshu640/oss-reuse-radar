@@ -148,6 +148,50 @@ migrated to `projectId::zh-CN` on init without deleting old data. `en` and
 - OSS-0T.3: bilingual rule and AI insight copy.
 - OSS-0T.4: bilingual visual acceptance and final README screenshots.
 
+## OSS-0T.2 full UI migration (2026-08-12)
+
+OSS-0T.2 completed the full English / Simplified Chinese UI migration on top
+of the 0T.1 foundation:
+
+- All major user-visible static copy in `index.html` now carries `data-i18n`
+  attributes (nav, hero, tabs, filters, search, favorites, packages,
+  compare, watch panels, dialogs, placeholders, meta title/description) and
+  is applied by `applyStaticI18n()`.
+- All dynamic UI copy in `app.js` (toasts, summaries, statuses, empty
+  states, errors, confirmations, cards, details, trust, insight, compare
+  dimensions, history/backup panels, runtime mode) is generated through the
+  `tt()` helper backed by the locale resources.
+- A visible language switch (简体中文 / English) lives in the sidebar; it
+  saves `openradar:locale:v1`, updates `<html lang>`, `<title>`, meta
+  description, static text, and re-renders every active view immediately
+  without a refresh.
+- Locale resolution and persistence are unchanged from OSS-0T.1
+  (saved > browser > en; `zh`/`zh-*` maps to `zh-CN`).
+- Category machine IDs, favorites, compare, radar cache, backup/import
+  state, legacy category migration, and insight cache schema v2 are
+  untouched; browser acceptance confirmed favorites and compare survive
+  locale switches and reloads.
+- English-mode leakage audit passed: across radar, search, favorites,
+  packages, compare, watch, and detail views, no Chinese UI copy remains
+  except the language-switch button labels themselves (both languages shown,
+  by design) and upstream source data, which stays untouched per class D.
+- Hardcoded allowlist (kept intentionally): platform/product names (GitHub,
+  Hugging Face, GitLab, Codeberg, Gitee, ModelScope, npm, PyPI, crates.io,
+  OpenRadar, Codex, OpenSSF, deps.dev, OSV, Ollama, qwen3:4b), technical
+  field names (Stars, Likes, Downloads, README, license identifiers, URLs,
+  versions), search-expansion regexes, seed example descriptions (now in
+  English), manual identity-correction notes, and internal comments.
+- The `fitForUser` internal field name is unchanged; user-visible labels are
+  "适用场景匹配度" (zh-CN) and "Use-case Fit" (en).
+- Tests: Node suite passes (31/31, including a new en/zh key-tree equality
+  and no-missing-translation check); JS/MJS syntax, Python `py_compile`,
+  JSON validation, and `git diff --check` pass.
+- Browser acceptance: real Playwright + system Edge on zh-CN and en-US ran
+  the full path (home, categories, filters, favorites, compare, detail,
+  package radar, watch), verified immediate language switching in both
+  directions, locale persistence across reload, zero page errors, and zero
+  console errors; Chinese-leak audit in English mode is empty.
+
 ## Security boundary
 
 No API key, token, personal directory, device configuration, telemetry, or

@@ -2,7 +2,76 @@ import { platformCatalog, platformIds, radarPlatform, searchPlatform } from './p
 import { deduplicationStats, entitiesOverlap, entityLookupIds, findEntityById, mergeProjectEntities, projectSources } from './project-identity.js';
 import { buildCodexResearchTask, codexExportSlug } from './codex-packet.js';
 import { compareProjects } from './project-comparator.js';
-import { CATEGORY_IDS, applyDocumentLanguage, categoryLabel, getSavedLocale, normalizeCategory, resolveLocale } from './i18n/index.js';
+import { CATEGORY_IDS, LOCALE_STORAGE_KEY, applyDocumentLanguage, categoryLabel, getSavedLocale, normalizeCategory, normalizeLocale, resolveLocale, setSavedLocale, t } from './i18n/index.js';
+
+function tt(key, params = {}) {
+  return t(key, state?.locale || 'zh-CN', params);
+}
+
+function historyCopy(periodId) {
+  const titles = {
+    today: tt('period.today'),
+    week: tt('period.week'),
+    month: tt('period.month'),
+    rising: tt('period.rising'),
+  };
+  const descriptions = {
+    today: tt('radar.descToday'),
+    week: tt('radar.descWeek'),
+    month: tt('radar.descMonth'),
+    rising: tt('radar.descRising'),
+  };
+  return [titles[periodId] || titles.today, descriptions[periodId] || descriptions.today];
+}
+
+function applyStaticI18n() {
+  const locale = state.locale;
+  document.querySelectorAll('[data-i18n]').forEach((node) => {
+    node.textContent = t(node.dataset.i18n, locale);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((node) => {
+    node.placeholder = t(node.dataset.i18nPlaceholder, locale);
+  });
+  document.querySelectorAll('[data-i18n-aria]').forEach((node) => {
+    node.setAttribute('aria-label', t(node.dataset.i18nAria, locale));
+  });
+}
+
+function applyDocumentLocale(locale) {
+  state.locale = normalizeLocale(locale) || 'zh-CN';
+  applyDocumentLanguage(document, state.locale);
+  applyStaticI18n();
+  renderCategories();
+  els.suggestions.innerHTML = suggestions.map((key) => {
+    const label = tt(`suggestions.${key}`);
+    return `<button class="chip" data-query="${escapeHtml(label)}">${escapeHtml(label)}</button>`;
+  }).join('');
+  renderRadar();
+  if (state.results.length) renderResults();
+  if (document.getElementById('favoritesView')?.classList.contains('active')) renderFavorites();
+  if (document.getElementById('packagesView')?.classList.contains('active')) renderPackageRadar();
+  if (document.getElementById('compareView')?.classList.contains('active')) renderCompare();
+  renderHistoryStatus();
+  renderInsightStatus();
+  renderServiceStatuses();
+  if (state.activeDetailId) renderDetail();
+}
+
+function setLocale(locale) {
+  const normalized = normalizeLocale(locale);
+  if (!normalized) return;
+  setSavedLocale(localStorage, normalized);
+  applyDocumentLocale(normalized);
+  document.querySelectorAll('[data-locale]').forEach((button) => {
+    button.setAttribute('aria-pressed', String(button.dataset.locale === normalized));
+  });
+}
+
+function bindLocaleSwitch() {
+  document.querySelectorAll('[data-locale]').forEach((button) => {
+    button.onclick = () => setLocale(button.dataset.locale);
+  });
+}
 
 const FAVORITES_KEY = 'openradar:favorites:v1';
 const RADAR_CACHE_KEY = 'openradar:radar-cache:v10';
@@ -11,12 +80,6 @@ const COMPARE_KEY = 'openradar:compare:v1';
 const APP_VERSION = '0.4-B';
 const HISTORY_PERIOD_MAP = { today: 'day', week: 'week', month: 'month' };
 const HISTORY_TARGET_HOURS = { day: 24, week: 168, month: 720 };
-const HISTORY_COPY = {
-  today: ['24小时增长', '仅在历史基线达到约20小时后显示真实增长；此前明确标记为积累中。'],
-  week: ['7天增长', '仅在历史基线达到约6天后显示真实增长；不同平台按各自主指标计算。'],
-  month: ['30天增长', '仅在历史基线达到约25天后显示真实增长；不会混同比较Star、Like与Downloads。'],
-  rising: ['低 Star 高潜力', '这是代理潜力排序，不等于真实增长；适合寻找尚未变成大热门的新项目。'],
-};
 const RADAR_CACHE_TTL = 15 * 60 * 1000;
 
 const categories = CATEGORY_IDS;
@@ -36,22 +99,6 @@ const categoryRules = [
   ['game-development', ['game', 'godot', 'phaser', 'pixi', 'roguelike', 'rpg', 'game engine', 'level editor', 'procedural generation']],
   ['web-app', ['typescript', 'javascript', 'react', 'next.js', 'web app', 'pwa', 'mobile app', 'desktop app', 'frontend', 'backend']],
 ];
-
-const useTypeLabels = {
-  direct: '直接安装使用',
-  selfhost: '适合个人部署',
-  codex: '适合Codex二次开发',
-  component: '技术组件',
-  reference: '适合模仿产品设计',
-  business: '存在商业化机会',
-};
-
-const actionLabels = {
-  later: '以后研究',
-  test: '立即测试',
-  codex: '交给 Codex 分析',
-  reference: '只参考设计',
-};
 
 const searchRules = [
   { re: /网页游戏|web游戏|h5游戏|浏览器游戏/i, primary: ['web', 'game', 'typescript'], anchors: ['game'], alternate: ['browser', 'javascript', 'phaser'] },
@@ -81,16 +128,7 @@ const searchRules = [
   { re: /开源|开放源代码/i, primary: [], anchors: [], alternate: [] },
 ];
 
-const suggestions = [
-  '适合网页游戏的开源NPC记忆系统',
-  '允许商用的图片转3D与自动绑定骨骼',
-  '开源PDF、OCR与文档整理工作台',
-  '适合个人部署的记账和家庭财务系统',
-  '旅行规划、行程管理与地图工具',
-  '适合Codex二次开发的CRM或SaaS底座',
-  'TypeScript NPC memory package',
-  'Python PDF OCR package',
-];
+const suggestions = ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8'];
 
 const seed = [
   {
@@ -98,7 +136,7 @@ const seed = [
     platform: 'github',
     name: 'repo-pulse',
     owner: 'ddfriday',
-    description: '追踪公开仓库快照，比较日、周、月增长并发现新兴 GitHub 项目。',
+    description: 'Tracks public repository snapshots, compares daily/weekly/monthly growth, and discovers emerging GitHub projects.',
     url: 'https://github.com/ddfriday/repo-pulse',
     stars: 0,
     forks: 0,
@@ -116,7 +154,7 @@ const seed = [
     platform: 'github',
     name: 'repos',
     owner: 'ecosyste-ms',
-    description: '跨代码托管平台的仓库元数据开放 API，是跨平台开源情报的重要底座。',
+    description: 'Open repository metadata API across code-hosting platforms; a key foundation for cross-platform open-source intelligence.',
     url: 'https://github.com/ecosyste-ms/repos',
     stars: 0,
     forks: 0,
@@ -134,7 +172,7 @@ const seed = [
     platform: 'github',
     name: 'OpenDigger',
     owner: 'X-lab2017',
-    description: '开源生态活跃度、贡献者网络与 OpenRank 指标平台，可补充项目健康度分析。',
+    description: 'Open-source ecosystem activity, contributor networks, and OpenRank metrics for project health analysis.',
     url: 'https://github.com/X-lab2017/open-digger',
     stars: 0,
     forks: 0,
@@ -265,16 +303,16 @@ function toggleCompare(project) {
   if (existing) {
     state.compareItems = state.compareItems.filter((item) => !entitiesOverlap(item, project));
     persistCompareItems();
-    toast('已移出对比');
+    toast(tt('compare.removed'));
     return;
   }
   if (state.compareItems.length >= 5) {
-    toast('最多同时对比5个项目');
+    toast(tt('compare.max'));
     return;
   }
   state.compareItems = [...state.compareItems, normalizeProject(project)];
   persistCompareItems();
-  toast(state.compareItems.length >= 2 ? '已加入对比，可打开项目对比页' : '已加入对比，再选一个即可比较');
+  toast(state.compareItems.length >= 2 ? tt('compare.added') : tt('compare.addedOneMore'));
 }
 
 function liveCompareItems() {
@@ -319,7 +357,7 @@ async function saveIdentityOverrides(anchorSourceId = '') {
       }));
       persistIdentityLocal();
     } catch (error) {
-      toast(`人工纠错已保存在浏览器；本地文件同步失败：${readableError(error)}`);
+      toast(tt('toast.identitySavedBrowser', { error: readableError(error) }));
     }
   }
 }
@@ -427,7 +465,7 @@ function escapeHtml(value = '') {
 }
 
 function formatNumber(value = 0) {
-  return new Intl.NumberFormat('zh-CN', {
+  return new Intl.NumberFormat(state?.locale === 'en' ? 'en-US' : 'zh-CN', {
     notation: value >= 1000 ? 'compact' : 'standard',
     maximumFractionDigits: 1,
   }).format(value);
@@ -439,12 +477,12 @@ function projectAgeDays(project) {
 }
 
 function timeAgo(value) {
-  if (!value) return '未知';
+  if (!value) return tt('timeAgo.unknown');
   const days = Math.max(0, Math.floor((Date.now() - new Date(value)) / 864e5));
-  if (days < 1) return '今天';
-  if (days < 30) return `${days}天前`;
-  if (days < 365) return `${Math.floor(days / 30)}个月前`;
-  return `${Math.floor(days / 365)}年前`;
+  if (days < 1) return tt('timeAgo.today');
+  if (days < 30) return tt('timeAgo.days', { n: days });
+  if (days < 365) return tt('timeAgo.months', { n: Math.floor(days / 30) });
+  return tt('timeAgo.years', { n: Math.floor(days / 365) });
 }
 
 function projectText(project) {
@@ -518,7 +556,7 @@ function entitySources(project) {
 function platformMeta(projectOrId) {
   const id = typeof projectOrId === 'string' ? projectOrId : projectOrId?.platform;
   return platformCatalog[id] || {
-    label: id || '未知平台',
+    label: id || tt('sourceHealth.unknown'),
     primaryField: 'stars',
     primaryLabel: 'Stars',
     secondaryField: 'forks',
@@ -580,27 +618,27 @@ function growthPercentile(project, periodId) {
 }
 
 function formatDurationHours(hours = 0) {
-  if (hours >= 24 * 20) return `${Math.round(hours / 24)}天`;
-  if (hours >= 24) return `${Math.round(hours / 24 * 10) / 10}天`;
-  return `${Math.max(0, Math.floor(hours))}小时`;
+  if (hours >= 24 * 20) return tt('duration.days', { n: Math.round(hours / 24) });
+  if (hours >= 24) return tt('duration.days', { n: Math.round(hours / 24 * 10) / 10 });
+  return tt('duration.hours', { n: Math.max(0, Math.floor(hours)) });
 }
 
 function growthBadge(project) {
   const periodId = HISTORY_PERIOD_MAP[state.period];
   if (!periodId) return '';
-  if (!state.historyAvailable) return '<div class="growth-line pending"><b>历史未启用</b><span>请使用本地服务器启动</span></div>';
+  if (!state.historyAvailable) return `<div class="growth-line pending"><b>${tt('growth.historyDisabled')}</b><span>${tt('growth.historyDisabledHint')}</span></div>`;
   const period = growthPeriod(project, periodId);
-  if (!period) return '<div class="growth-line pending"><b>尚未追踪</b><span>任一来源进入候选池后开始积累</span></div>';
+  if (!period) return `<div class="growth-line pending"><b>${tt('growth.notTracked')}</b><span>${tt('growth.notTrackedHint')}</span></div>`;
   const meta = platformMeta(period.sourceProject || project);
   const targetHours = HISTORY_TARGET_HOURS[periodId];
   if (period?.ready) {
     const delta = Number(period.deltas?.[meta.primaryField] || 0);
     const sign = delta > 0 ? '+' : '';
     const tone = delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral';
-    return `<div class="growth-line ${tone}"><b>${sign}${formatNumber(delta)}</b><span>${escapeHtml(platformMeta(period.sourceProject || project).shortLabel)} ${escapeHtml(meta.primaryLabel)} · 实际覆盖${escapeHtml(formatDurationHours(period.coveredHours))}</span></div>`;
+    return `<div class="growth-line ${tone}"><b>${sign}${formatNumber(delta)}</b><span>${escapeHtml(platformMeta(period.sourceProject || project).shortLabel)} ${escapeHtml(meta.primaryLabel)} · ${tt('growth.covered')}${escapeHtml(formatDurationHours(period.coveredHours))}</span></div>`;
   }
   const covered = Math.min(targetHours, Math.max(0, period?.coveredHours || state.historyStatus?.historyAgeHours || 0));
-  return `<div class="growth-line pending"><b>积累中</b><span>${escapeHtml(formatDurationHours(covered))} / ${escapeHtml(formatDurationHours(targetHours))}</span></div>`;
+  return `<div class="growth-line pending"><b>${tt('growth.accumulating')}</b><span>${escapeHtml(formatDurationHours(covered))} / ${escapeHtml(formatDurationHours(targetHours))}</span></div>`;
 }
 
 function projectPopularity(project) {
@@ -627,13 +665,13 @@ function rulePlainSummary(project) {
   const description = String(project.description || '').replace(/[。.!！]+$/u, '').trim();
   const useTypes = inferUseTypes(project);
   const mode = useTypes.includes('direct')
-    ? '可以先直接安装体验'
+    ? tt('rule.modeDirect')
     : useTypes.includes('component')
-      ? '更适合当作技术组件接入现有项目'
+      ? tt('rule.modeComponent')
       : useTypes.includes('codex')
-        ? '适合交给Codex审计后二次开发'
-        : '需要先阅读README确认使用方式';
-  return `${project.name}是一个偏${category}的开源项目${description ? `，主要做${description}` : ''}；${mode}。`;
+        ? tt('rule.modeCodex')
+        : tt('rule.modeReadme');
+  return tt('rule.summary', { name: project.name, category, description: description ? tt('rule.summaryDesc', { description }) : '', mode });
 }
 
 function projectInsight(project) {
@@ -644,9 +682,9 @@ function projectInsight(project) {
 }
 
 function insightSourceLabel(insight) {
-  if (!insight) return '规则摘要';
-  if (insight.source === 'ollama') return insight.cached ? '本地AI缓存' : '本地AI解读';
-  return '规则摘要';
+  if (!insight) return tt('insight.sourceRule');
+  if (insight.source === 'ollama') return insight.cached ? tt('insight.sourceAiCached') : tt('insight.sourceAi');
+  return tt('insight.sourceRule');
 }
 
 function findLiveEntity(id) {
@@ -704,32 +742,32 @@ function projectCard(project, saved = false, showGrowth = false) {
     : '';
   const savedNote = saved && favorite?.note ? `<div class="saved-note">${escapeHtml(favorite.note)}</div>` : '';
   const savedAction = saved && favorite?.action
-    ? `<span class="saved-action">下一步：${escapeHtml(actionLabels[favorite.action] || favorite.action)}</span>`
+    ? `<span class="saved-action">${tt('action.next')}：${escapeHtml(tt(`action.${favorite.action}`) || favorite.action)}</span>`
     : '';
   const useBadges = inferUseTypes(project)
-    .map((type) => `<span class="badge use-type">${escapeHtml(useTypeLabels[type] || type)}</span>`)
+    .map((type) => `<span class="badge use-type">${escapeHtml(tt(`useType.${type}`) || type)}</span>`)
     .join('');
   const insight = projectInsight(project);
   const plainSummary = insight?.summary || rulePlainSummary(project);
   const insightLabel = insightSourceLabel(insight);
-  const mergedBadge = project.sourceCount > 1 ? `<span class="badge merged">已合并 ${project.sourceCount} 个来源</span>` : '';
+  const mergedBadge = project.sourceCount > 1 ? `<span class="badge merged">${tt('card.mergedSources', { count: project.sourceCount })}</span>` : '';
   const compared = Boolean(comparedProject(project));
   const versionBadge = project.version ? `<span class="badge">v${escapeHtml(project.version)}</span>` : '';
 
   return `<article class="card ${compared ? 'is-compared' : ''}">
     <div class="card-top">
       ${avatar}
-      <div class="title"><button class="title-link" data-detail="${escapeHtml(key)}" title="查看 ${escapeHtml(`${project.owner}/${project.name}`)} 详情">${escapeHtml(project.name)}</button><p>${escapeHtml(project.owner)} · 更新于${timeAgo(project.updatedAt)}</p></div>
-      <button class="star ${favorite ? 'saved' : ''}" data-favorite="${escapeHtml(key)}" aria-label="收藏项目">${favorite ? '★' : '☆'}</button>
+    <div class="title"><button class="title-link" data-detail="${escapeHtml(key)}" title="${tt('card.viewDetail', { name: `${project.owner}/${project.name}` })}">${escapeHtml(project.name)}</button><p>${escapeHtml(project.owner)} · ${tt('detail.updatedAt', { time: timeAgo(project.updatedAt) })}</p></div>
+      <button class="star ${favorite ? 'saved' : ''}" data-favorite="${escapeHtml(key)}" aria-label="${tt('card.favorite')}">${favorite ? '★' : '☆'}</button>
     </div>
     <div class="source-row">${sourceBadgeRow(project)}${mergedBadge}${versionBadge}</div>
-    <p class="desc">${escapeHtml(project.description || '暂无描述，需要进一步读取项目文档。')}</p>
+    <p class="desc">${escapeHtml(project.description || tt('card.noDescription'))}</p>
     <div class="plain-summary ${insight?.source === 'ollama' ? 'ai' : 'rule'}"><span>${escapeHtml(insightLabel)}</span><p>${escapeHtml(plainSummary)}</p></div>
     <div class="badges">
       <span class="badge platform">${escapeHtml(platformLabel)}</span>
     <span class="badge">${escapeHtml(categoryLabel(project.category || classifyCategory(project), state.locale))}</span>
       ${project.language ? `<span class="badge">${escapeHtml(project.language)}</span>` : ''}
-      <span class="badge ${commercialFriendly(project.license) ? 'good' : 'warn'}">${escapeHtml(project.license || '许可证待核查')}</span>
+      <span class="badge ${commercialFriendly(project.license) ? 'good' : 'warn'}">${escapeHtml(project.license || tt('card.licenseUnknown'))}</span>
     </div>
     <div class="use-types">${useBadges}</div>
     ${savedTags}${savedAction}${savedNote}
@@ -737,15 +775,15 @@ function projectCard(project, saved = false, showGrowth = false) {
     <div class="stats">
       <div class="stat"><b>${formatNumber(popularity)}</b><span>${escapeHtml(meta.primaryLabel)}</span></div>
       <div class="stat"><b>${formatNumber(secondary)}</b><span>${escapeHtml(meta.secondaryLabel)}</span></div>
-      <div class="stat"><b>${timeAgo(project.createdAt)}</b><span>项目年龄</span></div>
+      <div class="stat"><b>${timeAgo(project.createdAt)}</b><span>${tt('card.projectAge')}</span></div>
       <div class="score" style="--score:${potentialScore(project)}">${potentialScore(project)}</div>
     </div>
     <div class="actions">
-      <button data-detail="${escapeHtml(key)}">查看详情</button>
-      <button data-analyze="${escapeHtml(key)}">中文解读</button>
-      <button class="compare-toggle ${compared ? 'active' : ''}" data-compare="${escapeHtml(key)}">${compared ? '移出对比' : '加入对比'}</button>
-      <a href="${escapeHtml(project.url)}" target="_blank" rel="noopener">打开主源</a>
-      ${saved ? `<button data-remove="${escapeHtml(key)}">移出收藏</button>` : ''}
+      <button data-detail="${escapeHtml(key)}">${tt('card.viewDetailShort')}</button>
+      <button data-analyze="${escapeHtml(key)}">${tt('card.insight')}</button>
+      <button class="compare-toggle ${compared ? 'active' : ''}" data-compare="${escapeHtml(key)}">${compared ? tt('compare.removed') : tt('card.addCompare')}</button>
+      <a href="${escapeHtml(project.url)}" target="_blank" rel="noopener">${tt('card.openSource')}</a>
+      ${saved ? `<button data-remove="${escapeHtml(key)}">${tt('card.removeFavorite')}</button>` : ''}
     </div>
   </article>`;
 }
@@ -764,7 +802,7 @@ function bindProjectActions(root) {
       const project = findProject(button.dataset.remove);
       if (!project) return;
       removeFavoriteProject(project);
-      toast('已移出收藏');
+      toast(tt('favorites.removed'));
     };
   });
   root.querySelectorAll('[data-analyze]').forEach((button) => {
@@ -788,8 +826,7 @@ function bindProjectActions(root) {
 
 
 function provenanceBadge(kind, label = '') {
-  const labels = { fact: '事实数据', rule: '规则判断', ai: '本地AI', human: '人工确认' };
-  return `<span class="provenance ${escapeHtml(kind)}">${escapeHtml(label || labels[kind] || kind)}</span>`;
+  return `<span class="provenance ${escapeHtml(kind)}">${escapeHtml(label || tt(`provenance.${kind}`) || kind)}</span>`;
 }
 
 function detailSourceCard(source, project) {
@@ -800,41 +837,41 @@ function detailSourceCard(source, project) {
   const period = growthPeriod(source);
   const growth = period?.ready
     ? `${Number(period.deltas?.[meta.primaryField] || 0) >= 0 ? '+' : ''}${formatNumber(Number(period.deltas?.[meta.primaryField] || 0))} ${meta.primaryLabel}`
-    : period ? `积累中 · ${formatDurationHours(period.coveredHours || 0)}` : '尚未追踪';
+    : period ? `${tt('growth.accumulating')} · ${formatDurationHours(period.coveredHours || 0)}` : tt('growth.notTracked');
   const sourceCount = entitySources(project).length;
   return `<article class="detail-source-card ${source.id === primaryId ? 'is-primary' : ''}">
-    <div class="split"><div><span class="badge platform">${escapeHtml(meta.label)}</span>${source.id === primaryId ? '<span class="badge good">主来源</span>' : ''}${provenanceBadge('fact')}</div><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener">打开来源 ↗</a></div>
-    <h3>${escapeHtml(source.owner || '未知作者')}/${escapeHtml(source.name)}</h3>
-    <p>${escapeHtml(source.description || '暂无公开描述。')}</p>
-    <div class="detail-source-metrics"><span><b>${formatNumber(primary)}</b>${escapeHtml(meta.primaryLabel)}</span><span><b>${formatNumber(secondary)}</b>${escapeHtml(meta.secondaryLabel)}</span><span><b>${escapeHtml(growth)}</b>${escapeHtml(HISTORY_COPY[state.period]?.[0] || '增长')}</span></div>
-    <div class="badges">${source.language ? `<span class="badge">${escapeHtml(source.language)}</span>` : ''}<span class="badge ${commercialFriendly(source.license) ? 'good' : 'warn'}">${escapeHtml(source.license || '许可证待核查')}</span><span class="badge">更新于${escapeHtml(timeAgo(source.updatedAt))}</span></div>
-    <div class="source-correction-actions">${source.id !== primaryId ? `<button data-set-primary="${escapeHtml(source.id)}">设为主来源</button>` : ''}${sourceCount > 1 ? `<button data-split-source="${escapeHtml(source.id)}">拆分此来源</button>` : ''}</div>
+    <div class="split"><div><span class="badge platform">${escapeHtml(meta.label)}</span>${source.id === primaryId ? `<span class="badge good">${tt('identity.primary')}</span>` : ''}${provenanceBadge('fact')}</div><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener">${tt('identity.openSource')}</a></div>
+    <h3>${escapeHtml(source.owner || tt('identity.unknownAuthor'))}/${escapeHtml(source.name)}</h3>
+    <p>${escapeHtml(source.description || tt('identity.noDescription'))}</p>
+    <div class="detail-source-metrics"><span><b>${formatNumber(primary)}</b>${escapeHtml(meta.primaryLabel)}</span><span><b>${formatNumber(secondary)}</b>${escapeHtml(meta.secondaryLabel)}</span><span><b>${escapeHtml(growth)}</b>${escapeHtml(tt('growth.growth'))}</span></div>
+    <div class="badges">${source.language ? `<span class="badge">${escapeHtml(source.language)}</span>` : ''}<span class="badge ${commercialFriendly(source.license) ? 'good' : 'warn'}">${escapeHtml(source.license || tt('card.licenseUnknown'))}</span><span class="badge">${tt('detail.updatedAt', { time: timeAgo(source.updatedAt) })}</span></div>
+    <div class="source-correction-actions">${source.id !== primaryId ? `<button data-set-primary="${escapeHtml(source.id)}">${tt('identity.setPrimary')}</button>` : ''}${sourceCount > 1 ? `<button data-split-source="${escapeHtml(source.id)}">${tt('identity.split')}</button>` : ''}</div>
   </article>`;
 }
 
 function detailInsightSections(project, insight) {
   const value = insight || {
     summary: rulePlainSummary(project),
-    whatItDoes: project.description || '需要阅读README进一步确认。',
-    useMode: inferUseTypes(project).map((type) => useTypeLabels[type] || type).join('；'),
-    commercial: `${project.license || '许可证待核查'}；正式采用前必须核对许可证原文和第三方依赖。`,
-    requirements: `${project.language ? `主要技术：${project.language}。` : ''}安装和硬件要求待核查。`,
-    codexValue: '适合先交给Codex做目录、依赖、许可证和接入成本审计。',
-    fitForUser: '需结合用户当前项目、Windows设备和8GB显存条件进一步判断。',
-    risks: ['当前仅有规则摘要，尚未完成上游代码审计。'],
-    recommendation: '先收藏并研究，不直接集成。',
+    whatItDoes: project.description || tt('insight.ruleWhat'),
+    useMode: inferUseTypes(project).map((type) => tt(`useType.${type}`) || type).join('；'),
+    commercial: `${project.license || tt('card.licenseUnknown')}；${tt('rule.commercialNote')}`,
+    requirements: `${project.language ? tt('rule.mainTech', { language: project.language }) : ''}${tt('rule.requirementsNote')}`,
+    codexValue: tt('rule.codexValue'),
+    fitForUser: tt('rule.fitFallback'),
+    risks: [tt('rule.riskFallback')],
+    recommendation: tt('rule.recommendFallback'),
   };
   const risks = Array.isArray(value.risks) ? value.risks : [];
   return `<div class="detail-insight-summary"><span>${escapeHtml(insightSourceLabel(insight))}</span><strong>${escapeHtml(value.summary || rulePlainSummary(project))}</strong></div>
     <div class="detail-insight-grid">
-      ${insightSection('它实际做什么', value.whatItDoes)}
-      ${insightSection('怎么使用或接入', value.useMode)}
-      ${insightSection('许可证与商用', value.commercial)}
-      ${insightSection('运行门槛', value.requirements)}
-      ${insightSection('交给Codex的价值', value.codexValue)}
-      ${insightSection('对你的适配度', value.fitForUser)}
-      ${risks.length ? `<section><h3>主要风险</h3><ul>${risks.map((risk) => `<li>${escapeHtml(risk)}</li>`).join('')}</ul></section>` : ''}
-      ${insightSection('当前建议', value.recommendation)}
+      ${insightSection(tt('insight.whatItDoes'), value.whatItDoes)}
+      ${insightSection(tt('insight.useMode'), value.useMode)}
+      ${insightSection(tt('insight.commercial'), value.commercial)}
+      ${insightSection(tt('insight.requirements'), value.requirements)}
+      ${insightSection(tt('insight.codexValue'), value.codexValue)}
+      ${insightSection(tt('insight.fitForUser'), value.fitForUser)}
+      ${risks.length ? `<section><h3>${tt('insight.risks')}</h3><ul>${risks.map((risk) => `<li>${escapeHtml(risk)}</li>`).join('')}</ul></section>` : ''}
+      ${insightSection(tt('insight.recommendation'), value.recommendation)}
     </div>`;
 }
 
@@ -853,7 +890,7 @@ function renderTrustPanel(project) {
   const report = trustForProject(project);
   const loading = state.trustLoadingId === projectKey(project);
   if (!report) {
-    return `<div class="trust-empty"><div>${provenanceBadge('fact', 'OpenSSF / deps.dev / OSV')}${provenanceBadge('rule')}</div><h3>${loading ? '正在运行免费可信度审计…' : '尚未运行可信度审计'}</h3><p>按需查询OpenSSF Scorecard、deps.dev与OSV。公开数据不足不等于安全，也不等于不安全。</p></div>`;
+    return `<div class="trust-empty"><div>${provenanceBadge('fact', 'OpenSSF / deps.dev / OSV')}${provenanceBadge('rule')}</div><h3>${loading ? tt('trust.emptyLoading') : tt('trust.emptyTitle')}</h3><p>${tt('trust.emptyDesc')}</p></div>`;
   }
   const assessment = report.assessment || {};
   const facts = report.facts || {};
@@ -863,20 +900,20 @@ function renderTrustPanel(project) {
   const lowChecks = (scorecard.checks || []).filter((check) => Number(check.score) >= 0).sort((a, b) => Number(a.score) - Number(b.score)).slice(0, 6);
   const advisories = (osv.advisories || []).slice(0, 8);
   return `<div class="trust-overview ${trustLevelClass(assessment.level)}">
-      <div class="trust-score"><b>${Number.isFinite(Number(assessment.score)) ? Number(assessment.score) : '—'}</b><span>规则可信度分 / 100</span></div>
-      <div><div class="provenance-row">${provenanceBadge('fact')}${provenanceBadge('rule')}</div><h3>${escapeHtml(assessment.label || '数据不足')}</h3><p>${escapeHtml(assessment.recommendation || '')}</p><small>生成于${escapeHtml(timeAgo(report.generatedAt))}；缓存24小时。自动结果不是安全认证或法律意见。</small></div>
+      <div class="trust-score"><b>${Number.isFinite(Number(assessment.score)) ? Number(assessment.score) : '—'}</b><span>${tt('trust.scoreLabel')}</span></div>
+      <div><div class="provenance-row">${provenanceBadge('fact')}${provenanceBadge('rule')}</div><h3>${escapeHtml(assessment.label || tt('trust.insufficient'))}</h3><p>${escapeHtml(assessment.recommendation || '')}</p><small>${tt('trust.generated', { time: timeAgo(report.generatedAt) })}</small></div>
     </div>
     <div class="trust-metrics">
-      <div><b>${Number.isFinite(Number(scorecard.overallScore)) ? Number(scorecard.overallScore).toFixed(1) : '—'}</b><span>OpenSSF / 10</span></div>
-      <div><b>${Number(osv.vulnerabilityCount || 0)}</b><span>OSV已知漏洞关联</span></div>
-      <div><b>${Number(deps.packages?.length || 0)}</b><span>deps.dev软件包映射</span></div>
-      <div><b>${escapeHtml(report.repository?.platform || '—')}</b><span>审计代码来源</span></div>
+      <div><b>${Number.isFinite(Number(scorecard.overallScore)) ? Number(scorecard.overallScore).toFixed(1) : '—'}</b><span>${tt('trust.ossf')}</span></div>
+      <div><b>${Number(osv.vulnerabilityCount || 0)}</b><span>${tt('trust.osv')}</span></div>
+      <div><b>${Number(deps.packages?.length || 0)}</b><span>${tt('trust.deps')}</span></div>
+      <div><b>${escapeHtml(report.repository?.platform || '—')}</b><span>${tt('trust.source')}</span></div>
     </div>
     <div class="trust-columns">
-      <section><h3>积极信号 ${provenanceBadge('rule')}</h3><ul>${(assessment.positives || []).map((item) => `<li>${escapeHtml(item)}</li>`).join('') || '<li>暂无足够积极信号。</li>'}</ul></section>
-      <section><h3>风险与缺口 ${provenanceBadge('rule')}</h3><ul>${(assessment.warnings || []).map((item) => `<li>${escapeHtml(item)}</li>`).join('') || '<li>没有规则警告，但仍需人工审计。</li>'}</ul></section>
-      <section><h3>Scorecard低分检查 ${provenanceBadge('fact')}</h3><ul>${lowChecks.map((check) => `<li><b>${escapeHtml(check.name)}</b> ${escapeHtml(String(check.score))}/10 · ${escapeHtml(check.reason || '无原因说明')}</li>`).join('') || '<li>没有可用的检查明细。</li>'}</ul></section>
-      <section><h3>OSV关联 ${provenanceBadge('fact')}</h3><ul>${advisories.map((item) => `<li><b>${escapeHtml(item.id)}</b> · ${escapeHtml(item.package?.system || '')}/${escapeHtml(item.package?.name || '')}@${escapeHtml(item.package?.version || '')}</li>`).join('') || '<li>未返回已知漏洞，或缺少可精确查询的软件包版本。</li>'}</ul></section>
+      <section><h3>${tt('trust.positives')} ${provenanceBadge('rule')}</h3><ul>${(assessment.positives || []).map((item) => `<li>${escapeHtml(item)}</li>`).join('') || `<li>${tt('trust.noPositives')}</li>`}</ul></section>
+      <section><h3>${tt('trust.warnings')} ${provenanceBadge('rule')}</h3><ul>${(assessment.warnings || []).map((item) => `<li>${escapeHtml(item)}</li>`).join('') || `<li>${tt('trust.noWarnings')}</li>`}</ul></section>
+      <section><h3>${tt('trust.lowChecks')} ${provenanceBadge('fact')}</h3><ul>${lowChecks.map((check) => `<li><b>${escapeHtml(check.name)}</b> ${escapeHtml(String(check.score))}/10 · ${escapeHtml(check.reason || tt('trust.noReason'))}</li>`).join('') || `<li>${tt('trust.noChecks')}</li>`}</ul></section>
+      <section><h3>${tt('trust.osvSection')} ${provenanceBadge('fact')}</h3><ul>${advisories.map((item) => `<li><b>${escapeHtml(item.id)}</b> · ${escapeHtml(item.package?.system || '')}/${escapeHtml(item.package?.name || '')}@${escapeHtml(item.package?.version || '')}</li>`).join('') || `<li>${tt('trust.noOsv')}</li>`}</ul></section>
     </div>`;
 }
 
@@ -896,7 +933,7 @@ async function loadCachedTrust(project) {
 
 async function analyzeTrust(project, force = false) {
   if (!state.trustServiceAvailable) {
-    toast('请使用 node server.mjs 启动本地可信度服务');
+    toast(tt('trust.needServer'));
     return;
   }
   const key = projectKey(project);
@@ -909,9 +946,9 @@ async function analyzeTrust(project, force = false) {
       body: JSON.stringify({ project, force }),
     });
     state.trustReports[report.projectId || key] = report;
-    toast('免费可信度审计完成');
+    toast(tt('trust.done'));
   } catch (error) {
-    toast(`可信度审计失败：${readableError(error)}`);
+    toast(tt('trust.failed', { error: readableError(error) }));
   } finally {
     state.trustLoadingId = '';
     renderDetail();
@@ -929,9 +966,9 @@ function identityCorrectionPanel(project) {
   const hasRelatedRules = (state.identityOverrides.mergeGroups || []).some((group) => group.sourceIds.some((id) => currentIds.has(id)))
     || (state.identityOverrides.blockedPairs || []).some((pair) => pair.some((id) => currentIds.has(id)))
     || Object.entries(state.identityOverrides.primaryByMember || {}).some(([member, primary]) => currentIds.has(member) || currentIds.has(primary));
-  return `<section class="detail-section identity-panel"><div class="section-title"><div><h2>身份纠错 ${project.humanConfirmed ? provenanceBadge('human') : provenanceBadge('rule')}</h2><p>自动合并只使用强信号。你可以手动合并、拆分或指定主来源；决定会写入本地并进入完整备份。</p></div>${hasRelatedRules ? '<button data-clear-identity>清除相关人工规则</button>' : ''}</div>
-    <div class="identity-merge-row"><select id="identityMergeTarget"><option value="">选择另一个项目实体…</option>${options}</select><button data-merge-identity ${options ? '' : 'disabled'}>人工合并</button></div>
-    <p class="identity-note">${sources.length > 1 ? `当前实体含${sources.length}个来源；拆分按钮位于每张来源卡底部。` : '当前只有一个来源；可从下拉框选择另一个项目人工合并。'} 人工判断仍需以官方互链、组织身份与许可证为证据。</p>
+  return `<section class="detail-section identity-panel"><div class="section-title"><div><h2>${tt('identity.title')} ${project.humanConfirmed ? provenanceBadge('human') : provenanceBadge('rule')}</h2><p>${tt('identity.desc')}</p></div>${hasRelatedRules ? `<button data-clear-identity>${tt('identity.clearRules')}</button>` : ''}</div>
+    <div class="identity-merge-row"><select id="identityMergeTarget"><option value="">${tt('identity.selectTarget')}</option>${options}</select><button data-merge-identity ${options ? '' : 'disabled'}>${tt('identity.merge')}</button></div>
+    <p class="identity-note">${sources.length > 1 ? tt('identity.noteMulti', { count: sources.length }) : tt('identity.noteSingle')} ${tt('identity.evidence')}</p>
   </section>`;
 }
 
@@ -981,14 +1018,14 @@ function backupClientState() {
 }
 
 function renderServiceStatuses() {
-  if (els.trustMode) els.trustMode.textContent = state.trustServiceAvailable ? '已启用 · 项目详情页按需审计' : '未启用 · 请用 node server.mjs 启动';
+  if (els.trustMode) els.trustMode.textContent = state.trustServiceAvailable ? tt('status.trustModeOn') : tt('status.trustModeOff');
   if (els.trustNote) els.trustNote.textContent = state.trustServiceAvailable
-    ? 'OpenSSF Scorecard、deps.dev与OSV通过本地同源服务查询；事实与规则结论分开显示。'
-    : '静态模式不运行可信度服务；项目浏览、收藏和规则摘要不受影响。';
-  if (els.backupMode) els.backupMode.textContent = state.backupAvailable ? '已启用 · 可迁移全部本地数据' : '仅浏览器数据备份';
+    ? tt('status.trustNoteOn')
+    : tt('status.trustNoteOff');
+  if (els.backupMode) els.backupMode.textContent = state.backupAvailable ? tt('status.backupModeOn') : tt('status.backupModeOff');
   if (els.backupNote) els.backupNote.textContent = state.backupAvailable
-    ? '完整备份包含收藏、人工纠错、历史、AI解读、可信度报告和Codex研究包。'
-    : '当前只能导出收藏、人工纠错与设置；历史和本地文件需要 node server.mjs。';
+    ? tt('status.backupNoteOn')
+    : tt('status.backupNoteOff');
 }
 
 async function exportFullBackup() {
@@ -1007,11 +1044,11 @@ async function exportFullBackup() {
       createdAt: new Date().toISOString(),
       appVersion: APP_VERSION,
       clientState,
-      warning: '静态模式备份不含历史、AI解读、可信度缓存和Codex研究包。',
+      warning: tt('status.backupStaticWarning'),
     };
   }
   downloadJson(backup, `openradar-full-backup-${new Date().toISOString().slice(0, 10)}.json`);
-  toast(state.backupAvailable ? '完整备份已导出' : '浏览器数据备份已导出');
+  toast(state.backupAvailable ? tt('toast.backupExported') : tt('toast.browserBackupExported'));
 }
 
 async function importFullBackupFile(file) {
@@ -1020,24 +1057,24 @@ async function importFullBackupFile(file) {
   try {
     backup = JSON.parse(await file.text());
   } catch {
-    toast('备份文件不是有效JSON');
+    toast(tt('toast.backupInvalidJson'));
     return;
   }
   const supported = ['openradar-backup', 'openradar-browser-backup'].includes(backup?.format);
-  if (!supported) return toast('不是受支持的OpenRadar备份');
-  if (!confirm('导入会替换当前收藏、人工纠错及本地数据。确认已备份当前版本并继续吗？')) return;
+  if (!supported) return toast(tt('toast.backupUnsupported'));
+  if (!confirm(tt('toast.backupConfirm'))) return;
   try {
     let clientState = backup.clientState || {};
-    let message = '浏览器数据已恢复。';
+    let message = tt('toast.backupRestored');
     if (backup.format === 'openradar-backup') {
-      if (!state.backupAvailable) throw new Error('完整备份必须使用 node server.mjs 导入');
+      if (!state.backupAvailable) throw new Error(tt('toast.backupNeedServer'));
       const result = await fetchJsonSafe('/api/backup/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ backup }),
       });
       clientState = result.clientState || clientState;
-      message = result.message || '完整备份已导入。';
+      message = result.message || tt('toast.backupImported');
     }
     state.favorites = (Array.isArray(clientState.favorites) ? clientState.favorites : []).map(normalizeProject);
     state.identityOverrides = normalizeIdentityOverrides(clientState.identityOverrides || {});
@@ -1047,16 +1084,16 @@ async function importFullBackupFile(file) {
     persistIdentityLocal();
     const settings = clientState.settings || {};
     state.category = normalizeCategory(settings.category);
-    if (HISTORY_COPY[settings.period]) state.period = settings.period;
+    if (HISTORY_PERIOD_MAP[settings.period]) state.period = settings.period;
     if ([...els.platform.options].some((option) => option.value === settings.platform)) els.platform.value = settings.platform;
     if ([...els.license.options].some((option) => option.value === settings.license)) els.license.value = settings.license;
     if ([...els.useType.options].some((option) => option.value === settings.useType)) els.useType.value = settings.useType;
     if (els.packageEcosystem && [...els.packageEcosystem.options].some((option) => option.value === settings.packageEcosystem)) els.packageEcosystem.value = settings.packageEcosystem;
     if (els.packageSort && [...els.packageSort.options].some((option) => option.value === settings.packageSort)) els.packageSort.value = settings.packageSort;
     rebuildEntities();
-    alert(`${message}\n\n请关闭黑色服务器窗口并重新运行 start-openradar.cmd，以重新载入历史、解读和可信度缓存。`);
+    alert(`${message}\n\n${tt('toast.backupRestart')}`);
   } catch (error) {
-    toast(`导入失败：${readableError(error)}`);
+    toast(tt('toast.backupImportFailed', { error: readableError(error) }));
   } finally {
     if (els.backupFile) els.backupFile.value = '';
   }
@@ -1067,13 +1104,13 @@ async function prepareCodexResearch(project) {
   const button = els.detailContent.querySelector('[data-codex]');
   if (button) {
     button.disabled = true;
-    button.textContent = '正在准备研究包…';
+    button.textContent = tt('detail.codexPreparing');
   }
   const insight = projectInsight(project);
   const trust = trustForProject(project);
   let packet;
   try {
-    if (!state.codexExportAvailable) throw new Error('本地导出服务未启用');
+    if (!state.codexExportAvailable) throw new Error(tt('detail.codexLocalUnavailable'));
     packet = await fetchJsonSafe('/api/codex/export', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1086,7 +1123,7 @@ async function prepareCodexResearch(project) {
       folder: '',
       files: [],
       autoLaunch: false,
-      message: `本地文件导出不可用，已在浏览器生成研究提示词：${readableError(error)}`,
+      message: tt('detail.codexLocalFallback', { error: readableError(error) }),
     };
   }
   state.codexTask = { ...packet, projectKey: key, filename: `${codexExportSlug(project)}-codex-research.md` };
@@ -1097,14 +1134,14 @@ async function prepareCodexResearch(project) {
     state.codexTask.copied = false;
   }
   renderDetail();
-  toast(packet.folder ? 'Codex研究包已生成并复制' : 'Codex研究提示词已复制');
+  toast(packet.folder ? tt('detail.codexCopied') : tt('detail.codexPromptCopied'));
 }
 
 function renderDetail() {
   if (!els.detailContent) return;
   const project = findProject(state.activeDetailId);
   if (!project) {
-    els.detailContent.innerHTML = '<div class="empty"><h3>项目详情尚未加载</h3><p>请返回雷达刷新数据后再打开。</p></div>';
+    els.detailContent.innerHTML = `<div class="empty"><h3>${tt('detail.emptyTitle')}</h3><p>${tt('detail.emptyHint')}</p></div>`;
     return;
   }
   const favorite = favoriteForProject(project);
@@ -1115,21 +1152,21 @@ function renderDetail() {
   const licenseVariants = [...new Set(sources.map((source) => source.license).filter(Boolean))];
   const languages = [...new Set(sources.map((source) => source.language).filter(Boolean))];
   const topics = [...new Set(sources.flatMap((source) => source.topics || []))].slice(0, 18);
-  const useBadges = inferUseTypes(project).map((type) => `<span class="badge use-type">${escapeHtml(useTypeLabels[type] || type)}</span>`).join('');
-  const packetResult = packet ? `<div class="codex-result ${packet.folder ? 'success' : 'warn'}"><b>${packet.folder ? '研究包已写入本地' : '研究提示词已准备'}</b><p>${escapeHtml(packet.message || '')}</p>${packet.folder ? `<code>${escapeHtml(packet.folder)}</code>` : ''}<div class="actions"><button data-copy-codex>再次复制</button><button data-download-codex>下载 Markdown</button></div></div>` : '';
+  const useBadges = inferUseTypes(project).map((type) => `<span class="badge use-type">${escapeHtml(tt(`useType.${type}`) || type)}</span>`).join('');
+  const packetResult = packet ? `<div class="codex-result ${packet.folder ? 'success' : 'warn'}"><b>${packet.folder ? tt('detail.codexSaved') : tt('detail.codexPrompt')}</b><p>${escapeHtml(packet.message || '')}</p>${packet.folder ? `<code>${escapeHtml(packet.folder)}</code>` : ''}<div class="actions"><button data-copy-codex>${tt('detail.codexCopyAgain')}</button><button data-download-codex>${tt('detail.codexDownload')}</button></div></div>` : '';
 
-  els.detailContent.innerHTML = `<div class="detail-back-row"><button id="detailBack">← 返回</button><button data-share-detail>复制详情链接</button></div>
+  els.detailContent.innerHTML = `<div class="detail-back-row"><button id="detailBack">${tt('detail.back')}</button><button data-share-detail>${tt('detail.share')}</button></div>
     <article class="detail-hero">
-      <div><em>UNIFIED OPEN-SOURCE PROFILE</em><div class="detail-title-row"><h1>${escapeHtml(project.name)}</h1><button class="star ${favorite ? 'saved' : ''}" data-favorite="${escapeHtml(projectKey(project))}">${favorite ? '★' : '☆'}</button></div><p>${escapeHtml(project.owner || '未知作者')} · ${project.sourceCount || 1} 个平台来源 · 更新于${escapeHtml(timeAgo(project.updatedAt))}</p><button class="detail-compare ${comparedProject(project) ? 'active' : ''}" data-detail-compare>${comparedProject(project) ? '✓ 已加入项目对比' : '＋ 加入项目对比'}</button></div>
-      <div class="detail-score"><span>综合潜力</span><b>${potentialScore(project)}</b></div>
+      <div><em>UNIFIED OPEN-SOURCE PROFILE</em><div class="detail-title-row"><h1>${escapeHtml(project.name)}</h1><button class="star ${favorite ? 'saved' : ''}" data-favorite="${escapeHtml(projectKey(project))}">${favorite ? '★' : '☆'}</button></div><p>${escapeHtml(project.owner || tt('detail.unknownOwner'))} · ${tt('detail.platformSources', { count: project.sourceCount || 1 })} · ${tt('detail.updatedAt', { time: timeAgo(project.updatedAt) })}</p><button class="detail-compare ${comparedProject(project) ? 'active' : ''}" data-detail-compare>${comparedProject(project) ? tt('detail.inCompare') : tt('detail.addCompare')}</button></div>
+      <div class="detail-score"><span>${tt('detail.potential')}</span><b>${potentialScore(project)}</b></div>
     </article>
   <div class="detail-badges"><span class="badge">${escapeHtml(categoryLabel(project.category || classifyCategory(project), state.locale))}</span>${useBadges}${languages.map((language) => `<span class="badge">${escapeHtml(language)}</span>`).join('')}${licenseVariants.map((license) => `<span class="badge ${commercialFriendly(license) ? 'good' : 'warn'}">${escapeHtml(license)}</span>`).join('')}</div>
     ${topics.length ? `<div class="detail-topics">${topics.map((topic) => `<span>${escapeHtml(topic)}</span>`).join('')}</div>` : ''}
-    <section class="detail-section"><div class="section-title"><div><h2>统一中文情报 ${insight?.source === 'ollama' ? provenanceBadge('ai') : provenanceBadge('rule')}</h2><p>同一项目的多平台来源合并后，只保留一张完整情报卡。</p></div><button data-analyze="${escapeHtml(projectKey(project))}">${insight ? '查看/更新中文解读' : '生成中文解读'}</button></div>${detailInsightSections(project, insight)}</section>
-    <section class="detail-section trust-panel"><div class="section-title"><div><h2>安全与可信度</h2><p>免费按需查询OpenSSF Scorecard、deps.dev与OSV；自动结果只用于风险筛查。</p></div><button data-trust ${state.trustLoadingId === projectKey(project) ? 'disabled' : ''}>${state.trustLoadingId === projectKey(project) ? '审计中…' : (trust ? '重新审计' : '运行免费审计')}</button></div>${renderTrustPanel(project)}</section>
-    <section class="detail-section"><div class="section-title"><div><h2>跨平台来源 ${provenanceBadge('fact')}</h2><p>${sources.length > 1 ? `已通过${escapeHtml((project.dedupReasons || []).join('、') || '身份信号')}合并${sources.length}条来源；采用前仍需让Codex核验是否真为同一项目。` : '当前只发现一个来源。'}</p></div><span>${sources.length} SOURCES</span></div><div class="detail-source-grid">${sources.map((source) => detailSourceCard(source, project)).join('')}</div></section>
+    <section class="detail-section"><div class="section-title"><div><h2>${tt('detail.unifiedTitle')} ${insight?.source === 'ollama' ? provenanceBadge('ai') : provenanceBadge('rule')}</h2><p>${tt('detail.unifiedDesc')}</p></div><button data-analyze="${escapeHtml(projectKey(project))}">${insight ? tt('detail.viewInsight') : tt('detail.generateInsight')}</button></div>${detailInsightSections(project, insight)}</section>
+    <section class="detail-section trust-panel"><div class="section-title"><div><h2>${tt('detail.trustTitle')}</h2><p>${tt('detail.trustDesc')}</p></div><button data-trust ${state.trustLoadingId === projectKey(project) ? 'disabled' : ''}>${state.trustLoadingId === projectKey(project) ? tt('detail.trustLoading') : (trust ? tt('detail.trustRerun') : tt('detail.trustRun'))}</button></div>${renderTrustPanel(project)}</section>
+    <section class="detail-section"><div class="section-title"><div><h2>${tt('detail.sourcesTitle')} ${provenanceBadge('fact')}</h2><p>${sources.length > 1 ? tt('detail.sourcesDescMulti', { reasons: escapeHtml((project.dedupReasons || []).join('、') || tt('identity.signals')), count: sources.length }) : tt('detail.sourcesDescSingle')}</p></div><span>${sources.length} SOURCES</span></div><div class="detail-source-grid">${sources.map((source) => detailSourceCard(source, project)).join('')}</div></section>
     ${identityCorrectionPanel(project)}
-    <section class="detail-section codex-panel"><div><em>CODEX RESEARCH PACKET</em><h2>一键交给 Codex 研究</h2><p>生成一份包含所有平台来源、中文解读、许可证核查、维护健康、安全风险、替代方案和强制交接格式的研究任务。当前版本不会自动启动Codex，也不会在你不知情时消耗额度。</p></div><button class="primary codex-button" data-codex>生成并复制研究任务</button>${packetResult}</section>`;
+    <section class="detail-section codex-panel"><div><em>CODEX RESEARCH PACKET</em><h2>${tt('detail.codexTitle')}</h2><p>${tt('detail.codexDesc')}</p></div><button class="primary codex-button" data-codex>${tt('detail.codexButton')}</button>${packetResult}</section>`;
 
   els.detailContent.querySelector('#detailBack').onclick = () => {
     if (location.hash.startsWith('#project=')) history.back();
@@ -1144,41 +1181,41 @@ function renderDetail() {
     button.onclick = async () => {
       setIdentityPrimary(project, button.dataset.setPrimary);
       await saveIdentityOverrides(button.dataset.setPrimary);
-      toast('已指定人工主来源');
+      toast(tt('identity.primarySet'));
     };
   });
   els.detailContent.querySelectorAll('[data-split-source]').forEach((button) => {
     button.onclick = async () => {
       const sourceId = button.dataset.splitSource;
-      if (!confirm('确定把这个来源从当前实体拆分吗？此决定会保存到人工纠错规则。')) return;
+      if (!confirm(tt('identity.splitConfirm'))) return;
       splitIdentitySource(project, sourceId);
       await saveIdentityOverrides(sourceId);
-      toast('来源已拆分');
+      toast(tt('identity.splitDone'));
     };
   });
   els.detailContent.querySelector('[data-merge-identity]')?.addEventListener('click', async () => {
     const targetId = els.detailContent.querySelector('#identityMergeTarget')?.value;
     const target = findProject(targetId);
-    if (!target) return toast('请选择要合并的项目');
-    if (!confirm(`确定人工合并 ${project.owner}/${project.name} 与 ${target.owner}/${target.name} 吗？`)) return;
+    if (!target) return toast(tt('identity.chooseProject'));
+    if (!confirm(tt('identity.mergeConfirm', { a: `${project.owner}/${project.name}`, b: `${target.owner}/${target.name}` }))) return;
     const anchor = mergeIdentityEntities(project, target);
     await saveIdentityOverrides(anchor);
-    toast('项目已人工合并');
+    toast(tt('identity.mergedDone'));
   });
   els.detailContent.querySelector('[data-clear-identity]')?.addEventListener('click', async () => {
-    if (!confirm('确定清除此项目相关的人工合并、拆分和主来源规则吗？')) return;
+    if (!confirm(tt('identity.clearConfirm'))) return;
     const anchor = entitySources(project)[0]?.id;
     clearIdentityRules(project);
     await saveIdentityOverrides(anchor);
-    toast('相关人工纠错规则已清除');
+    toast(tt('identity.clearedDone'));
   });
   els.detailContent.querySelector('[data-share-detail]').onclick = async () => {
     await copyText(location.href);
-    toast('详情链接已复制');
+    toast(tt('detail.copiedLink'));
   };
   els.detailContent.querySelector('[data-copy-codex]')?.addEventListener('click', async () => {
     await copyText(packet.task);
-    toast('Codex研究任务已复制');
+    toast(tt('detail.codexTaskCopied'));
   });
   els.detailContent.querySelector('[data-download-codex]')?.addEventListener('click', () => downloadText(packet.task, packet.filename));
 }
@@ -1241,22 +1278,22 @@ function renderPackageRadar() {
   els.packageDownloadCount.textContent = formatNumber(downloads);
   els.packageDependentCount.textContent = formatNumber(dependents);
   els.packageComparedCount.textContent = state.compareItems.length;
-  els.packageTitle.textContent = state.packageSearchResults.length ? '软件包搜索结果' : '软件包生态雷达';
+  els.packageTitle.textContent = state.packageSearchResults.length ? tt('packages.titleResults') : tt('packages.titleRadar');
   els.packageDesc.textContent = state.packageSearchResults.length
-    ? '搜索结果会与已发现的代码仓库保守合并；下载量与下游采用来自公开数据，不等于安全或适合直接接入。'
-    : '默认展示当前雷达收录的 npm、PyPI 与 crates.io 组件；真实增长将由本地历史快照逐步积累。';
-  els.packageStatus.textContent = `${projects.length} 个软件包实体`;
+    ? tt('packages.descResults')
+    : tt('packages.descRadar');
+  els.packageStatus.textContent = tt('packages.statusCount', { count: projects.length });
   els.packageGrid.innerHTML = projects.length
     ? projects.map((project) => projectCard(project, false, true)).join('')
-    : '<div class="empty"><h3>暂无软件包结果</h3><p>请确认使用 node server.mjs 启动，然后输入英文技术关键词搜索。</p></div>';
+    : `<div class="empty"><h3>${tt('packages.empty')}</h3><p>${tt('packages.emptyHint')}</p></div>`;
   bindProjectActions(els.packageGrid);
   renderSourceHealth(els.packageSources, state.packageSourceStatus);
 }
 
 async function searchPackages(query) {
   const safeQuery = String(query || '').trim();
-  if (!safeQuery) return toast('请输入软件包用途或技术关键词');
-  if (!state.packageServiceAvailable) return toast('软件包搜索需要使用 node server.mjs 启动');
+  if (!safeQuery) return toast(tt('packages.queryEmpty'));
+  if (!state.packageServiceAvailable) return toast(tt('packages.needServer'));
   const ecosystems = (els.packageEcosystem?.value || 'all') === 'all' ? ['npm', 'pypi', 'crates'] : [els.packageEcosystem.value];
   state.packageSourceStatus = Object.fromEntries(ecosystems.map((id) => [id, sourceStatusEntry('loading')]));
   state.packageSearchResults = [];
@@ -1274,7 +1311,7 @@ async function searchPackages(query) {
   });
   const rawIds = new Set(raw.map((project) => project.id));
   state.packageSearchResults = dedupeEntities([...state.rawProjects, ...raw]).filter((entity) => entitySources(entity).some((source) => rawIds.has(source.id)));
-  els.packageStatus.textContent = `“${safeQuery}” 找到 ${state.packageSearchResults.length} 个实体`;
+  els.packageStatus.textContent = tt('packages.statusFound', { query: safeQuery, count: state.packageSearchResults.length });
   renderPackageRadar();
   void loadCachedInsights(state.packageSearchResults);
   void loadHistoryGrowth(state.packageSearchResults, true);
@@ -1291,31 +1328,31 @@ function renderCompare() {
   const report = compareProjects(items, state.trustReports);
   els.compareCount.textContent = items.length;
   els.packageComparedCount.textContent = items.length;
-  els.compareSelection.innerHTML = items.map((project) => `<article class="compare-chip"><div><b>${escapeHtml(project.name)}</b><span>${escapeHtml(project.owner || '')} · ${escapeHtml(entitySources(project).map((source) => platformMeta(source).shortLabel).join(' + '))}</span></div><div><button data-detail="${escapeHtml(projectKey(project))}">详情</button><button data-remove-compare="${escapeHtml(projectKey(project))}">×</button></div></article>`).join('');
+  els.compareSelection.innerHTML = items.map((project) => `<article class="compare-chip"><div><b>${escapeHtml(project.name)}</b><span>${escapeHtml(project.owner || '')} · ${escapeHtml(entitySources(project).map((source) => platformMeta(source).shortLabel).join(' + '))}</span></div><div><button data-detail="${escapeHtml(projectKey(project))}">${tt('compare.details')}</button><button data-remove-compare="${escapeHtml(projectKey(project))}">×</button></div></article>`).join('');
   els.compareEmpty.hidden = items.length >= 2;
   els.compareRecommendation.innerHTML = items.length >= 2
-    ? `<article class="compare-recommendation"><em>OPENRADAR DECISION</em><h2>${escapeHtml(report.winner?.facts?.name || '')} 当前综合更优</h2><p>${escapeHtml(report.recommendation)}</p><small>综合分是规则判断，不是安全认证、性能基准或法律意见。未运行可信度审计的项目按中性分处理。</small></article>`
+    ? `<article class="compare-recommendation"><em>OPENRADAR DECISION</em><h2>${tt('compare.recommendationTitle', { name: escapeHtml(report.winner?.facts?.name || '') })}</h2><p>${escapeHtml(report.recommendation)}</p><small>${tt('compare.recommendationNote')}</small></article>`
     : '';
   if (items.length < 2) {
     els.compareTableWrap.innerHTML = '';
   } else {
     const rows = report.rows;
-    const headers = rows.map((row) => `<th><button data-detail="${escapeHtml(projectKey(row.project))}">${escapeHtml(row.facts.name)}</button><span>${row.score}分</span></th>`).join('');
+    const headers = rows.map((row) => `<th><button data-detail="${escapeHtml(projectKey(row.project))}">${escapeHtml(row.facts.name)}</button><span>${tt('compare.score', { score: row.score })}</span></th>`).join('');
     const row = (label, render) => `<tr><th>${label}</th>${rows.map((item) => compareCell(render(item))).join('')}</tr>`;
-    els.compareTableWrap.innerHTML = `<table class="compare-table"><thead><tr><th>对比维度</th>${headers}</tr></thead><tbody>
-      ${row('一句大白话', ({ project }) => escapeHtml(projectInsight(project)?.summary || rulePlainSummary(project)))}
-      ${row('平台来源', ({ facts }) => escapeHtml(facts.platforms.map((id) => platformCatalog[id]?.shortLabel || id).join(' + ')))}
-      ${row('软件包版本', ({ facts }) => escapeHtml(facts.version || '—'))}
+    els.compareTableWrap.innerHTML = `<table class="compare-table"><thead><tr><th>${tt('compare.dimension')}</th>${headers}</tr></thead><tbody>
+      ${row(tt('compare.plainSummary'), ({ project }) => escapeHtml(projectInsight(project)?.summary || rulePlainSummary(project)))}
+      ${row(tt('compare.platforms'), ({ facts }) => escapeHtml(facts.platforms.map((id) => platformCatalog[id]?.shortLabel || id).join(' + ')))}
+      ${row(tt('compare.version'), ({ facts }) => escapeHtml(facts.version || '—'))}
       ${row('Stars', ({ facts }) => formatNumber(facts.stars))}
-      ${row('下载量', ({ facts }) => formatNumber(facts.downloads))}
-      ${row('下游采用', ({ facts }) => formatNumber(facts.dependents))}
-      ${row('许可证', ({ facts }) => `<span class="badge ${commercialFriendly(facts.license) ? 'good' : 'warn'}">${escapeHtml(facts.license)}</span>`)}
-      ${row('最近更新', ({ facts }) => escapeHtml(timeAgo(facts.updatedAt)))}
-      ${row('可信度', ({ facts }) => `${Math.round(facts.scores.trust)} / 100`)}
-      ${row('真实采用', ({ facts }) => `${Math.round(facts.scores.adoption)} / 100`)}
-      ${row('维护活跃', ({ facts }) => `${Math.round(facts.scores.maintenance)} / 100`)}
-      ${row('接入简易度', ({ facts }) => `${Math.round(facts.scores.simplicity)} / 100`)}
-      ${row('对你的适配', ({ facts }) => `${Math.round(facts.scores.fit)} / 100`)}
+      ${row(tt('compare.downloads'), ({ facts }) => formatNumber(facts.downloads))}
+      ${row(tt('compare.dependents'), ({ facts }) => formatNumber(facts.dependents))}
+      ${row(tt('compare.license'), ({ facts }) => `<span class="badge ${commercialFriendly(facts.license) ? 'good' : 'warn'}">${escapeHtml(facts.license)}</span>`)}
+      ${row(tt('compare.updated'), ({ facts }) => escapeHtml(timeAgo(facts.updatedAt)))}
+      ${row(tt('compare.trust'), ({ facts }) => `${Math.round(facts.scores.trust)} / 100`)}
+      ${row(tt('compare.adoption'), ({ facts }) => `${Math.round(facts.scores.adoption)} / 100`)}
+      ${row(tt('compare.maintenance'), ({ facts }) => `${Math.round(facts.scores.maintenance)} / 100`)}
+      ${row(tt('compare.simplicity'), ({ facts }) => `${Math.round(facts.scores.simplicity)} / 100`)}
+      ${row(tt('compare.fit'), ({ facts }) => `${Math.round(facts.scores.fit)} / 100`)}
     </tbody></table>`;
   }
   els.compareSelection.querySelectorAll('[data-remove-compare]').forEach((button) => {
@@ -1331,11 +1368,11 @@ function renderCompare() {
 
 async function auditCompareItems() {
   if (state.compareAuditing) return;
-  if (!state.trustServiceAvailable) return toast('请使用 node server.mjs 启用可信度服务');
+  if (!state.trustServiceAvailable) return toast(tt('compare.needServer'));
   const items = liveCompareItems();
   state.compareAuditing = true;
   els.auditCompare.disabled = true;
-  els.auditCompare.textContent = '逐项审计中…';
+  els.auditCompare.textContent = tt('compare.auditing');
   try {
     for (const project of items) {
       if (trustForProject(project)) continue;
@@ -1349,11 +1386,11 @@ async function auditCompareItems() {
       }
     }
     renderCompare();
-    toast('对比项目可信度审计已完成或按公开覆盖降级');
+    toast(tt('compare.auditDone'));
   } finally {
     state.compareAuditing = false;
     els.auditCompare.disabled = false;
-    els.auditCompare.textContent = '审计缺失项目';
+    els.auditCompare.textContent = tt('compare.audit');
   }
 }
 
@@ -1396,16 +1433,16 @@ function filteredProjects() {
 }
 
 function renderRadar() {
-  const [title, description] = HISTORY_COPY[state.period] || HISTORY_COPY.today;
+  const [title, description] = historyCopy(state.period);
   els.radarTitle.textContent = title;
   const historySuffix = state.historyAvailable
-    ? ` 本地历史：${state.historyStatus?.projectCount || 0}个项目、${state.historyStatus?.sampleCount || 0}条样本。`
-    : ' 需使用 node server.mjs 才能保存真实历史。';
+    ? tt('radar.historySuffix', { projects: state.historyStatus?.projectCount || 0, samples: state.historyStatus?.sampleCount || 0 })
+    : tt('radar.historyStatic');
   els.radarDesc.textContent = `${description}${historySuffix}`;
   const projects = filteredProjects();
   els.projectGrid.innerHTML = projects.length
     ? projects.map((project) => projectCard(project, false, true)).join('')
-    : '<div class="empty"><h3>没有符合条件的项目</h3><p>可以切换分类、用途或许可证筛选。</p></div>';
+    : `<div class="empty"><h3>${tt('radar.empty')}</h3><p>${tt('radar.emptyHint')}</p></div>`;
   const stats = deduplicationStats(state.rawProjects, state.projects);
   els.candidateMetric.textContent = stats.entityCount;
   els.mergedMetric.textContent = stats.mergedSourceCount;
@@ -1417,7 +1454,7 @@ function renderFavorites() {
   const query = els.favoriteSearch.value.toLowerCase();
   const selectedTag = els.tagFilter.value;
   let favorites = state.favorites
-    .filter((favorite) => !query || [favorite.name, favorite.owner, favorite.note, favorite.category, ...inferUseTypes(favorite).map((type) => useTypeLabels[type]), ...(favorite.tags || [])].join(' ').toLowerCase().includes(query))
+    .filter((favorite) => !query || [favorite.name, favorite.owner, favorite.note, favorite.category, ...inferUseTypes(favorite).map((type) => tt(`useType.${type}`)), ...(favorite.tags || [])].join(' ').toLowerCase().includes(query))
     .filter((favorite) => selectedTag === 'all' || favorite.tags?.includes(selectedTag));
 
   els.favoriteEmpty.hidden = Boolean(favorites.length);
@@ -1425,7 +1462,7 @@ function renderFavorites() {
 
   const tags = [...new Set(state.favorites.flatMap((favorite) => favorite.tags || []))].sort();
   const currentTag = els.tagFilter.value;
-  els.tagFilter.innerHTML = '<option value="all">全部标签</option>' + tags.map((tag) => `<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`).join('');
+  els.tagFilter.innerHTML = `<option value="all">${tt('filter.allTags')}</option>` + tags.map((tag) => `<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`).join('');
   if (tags.includes(currentTag)) els.tagFilter.value = currentTag;
   bindProjectActions(els.favoriteGrid);
 }
@@ -1461,7 +1498,7 @@ function openFavoriteDialog(id) {
   const favorite = project ? favoriteForProject(project) : null;
   if (!project) return;
   els.projectId.value = projectKey(project);
-  els.dialogTitle.textContent = favorite ? `编辑收藏 · ${project.name}` : `收藏 · ${project.name}`;
+  els.dialogTitle.textContent = favorite ? tt('favorites.editTitle', { name: project.name }) : tt('favorites.saveTitle', { name: project.name });
   els.tags.value = favorite?.tags?.join(', ') || '';
   els.note.value = favorite?.note || '';
   els.action.value = favorite?.action || 'later';
@@ -1472,13 +1509,25 @@ function sourceStatusEntry(stateName, count = 0, message = '', badge = '') {
   return { state: stateName, count, message, badge };
 }
 
+function badgeLabel(badge) {
+  if (!badge) return '';
+  const labels = {
+    '外部搜索': tt('search.platformSearchOnly'),
+    '搜索回退': tt('search.badgeFallback'),
+    '过期缓存（非实时）': tt('search.badgeStale'),
+    '服务端缓存（非实时）': tt('search.badgeFresh'),
+    '已重新验证': tt('search.badgeRevalidated'),
+  };
+  return labels[badge] || badge;
+}
+
 function readableError(error) {
-  const message = error?.message || String(error || '未知错误');
-  if (/primary-rate-limit|rate-limited-cooldown/i.test(message)) return '上游限流，暂不重复请求';
-  if (/secondary-rate-limit/i.test(message)) return '上游次级限流，已降低请求频率';
-  if (/upstream-http-(429|403)/i.test(message)) return '上游限流或暂时拒绝';
-  if (/upstream-http-5\d\d|upstream-unavailable|network-error|timeout/i.test(message)) return '上游暂不可用';
-  if (/Failed to fetch|NetworkError|Load failed/i.test(message)) return '网络或跨域限制';
+  const message = error?.message || String(error || tt('errors.unknown'));
+  if (/primary-rate-limit|rate-limited-cooldown/i.test(message)) return tt('errors.rateLimited');
+  if (/secondary-rate-limit/i.test(message)) return tt('errors.secondaryLimited');
+  if (/upstream-http-(429|403)/i.test(message)) return tt('errors.upstreamThrottled');
+  if (/upstream-http-5\d\d|upstream-unavailable|network-error|timeout/i.test(message)) return tt('errors.upstreamDown');
+  if (/Failed to fetch|NetworkError|Load failed/i.test(message)) return tt('errors.network');
   return message;
 }
 
@@ -1495,12 +1544,12 @@ function renderSourceHealth(target, statuses) {
       : status.state === 'empty'
         ? '0'
         : status.state === 'error'
-          ? '不可用'
+          ? tt('sourceHealth.unavailable')
           : status.state === 'loading'
-            ? '查询中'
-            : '待查询';
+            ? tt('sourceHealth.querying')
+            : tt('sourceHealth.pending');
     const title = status.message ? ` title="${escapeHtml(status.message)}"` : '';
-    const badge = status.badge ? `<small>${escapeHtml(status.badge)}</small>` : '';
+    const badge = status.badge ? `<small>${escapeHtml(badgeLabel(status.badge))}</small>` : '';
     return `<span class="source-chip ${status.state}"${title}><i></i>${escapeHtml(meta.shortLabel)} ${escapeHtml(label)}${badge}</span>`;
   }).join('');
 }
@@ -1519,16 +1568,16 @@ function renderHistoryStatus() {
   const status = state.historyStatus || {};
   if (els.historyProjectCount) els.historyProjectCount.textContent = status.projectCount ?? '—';
   if (els.historySampleCount) els.historySampleCount.textContent = status.sampleCount ?? '—';
-  if (els.historyFirst) els.historyFirst.textContent = status.firstCapturedAt ? timeAgo(status.firstCapturedAt) : '尚未开始';
-  if (els.historyLast) els.historyLast.textContent = status.lastCapturedAt ? timeAgo(status.lastCapturedAt) : '尚未采集';
-  if (els.historyMode) els.historyMode.textContent = state.historyAvailable ? '本地JSON · 每6小时' : '未启用';
+  if (els.historyFirst) els.historyFirst.textContent = status.firstCapturedAt ? timeAgo(status.firstCapturedAt) : tt('watch.first');
+  if (els.historyLast) els.historyLast.textContent = status.lastCapturedAt ? timeAgo(status.lastCapturedAt) : tt('watch.last');
+  if (els.historyMode) els.historyMode.textContent = state.historyAvailable ? tt('watch.modeEnabled') : tt('watch.modeDisabled');
   if (els.historyNote) {
     const collector = status.collector || {};
     const readiness = status.readiness || {};
-    const readyLabels = [readiness.day && '24小时', readiness.week && '7天', readiness.month && '30天'].filter(Boolean);
+    const readyLabels = [readiness.day && tt('period.today'), readiness.week && tt('period.week'), readiness.month && tt('period.month')].filter(Boolean);
     els.historyNote.textContent = state.historyAvailable
-      ? `${collector.running ? '后台采集中。' : '后台待命。'}${readyLabels.length ? ` 已具备${readyLabels.join('、')}真实增长基线。` : ' 首次运行后需要等待时间积累，不能立即生成历史涨幅。'} 本地服务器关闭期间不会自动采集。`
-      : '当前为静态模式，不会保存历史。请使用 node server.mjs 或 start-openradar.cmd 启动。';
+      ? `${collector.running ? tt('watch.backgroundRunning') : tt('watch.backgroundIdle')}${readyLabels.length ? tt('watch.readyBaselines', { labels: readyLabels.join('、') }) : tt('watch.waiting')}${tt('watch.serverOff')}`
+      : tt('watch.staticNote');
   }
 }
 
@@ -1539,15 +1588,15 @@ function renderInsightStatus() {
   if (els.insightModel) els.insightModel.textContent = status.model || 'qwen3:4b';
   if (els.insightMode) {
     els.insightMode.textContent = state.insightAvailable
-      ? 'Ollama已连接 · 按需生成'
+      ? tt('status.insightOn')
       : state.insightServiceAvailable
-        ? '规则摘要可用 · 本地AI未就绪'
-        : '静态模式 · 仅规则摘要';
+        ? tt('status.insightRule')
+        : tt('status.insightStatic');
   }
   if (els.insightNote) {
     els.insightNote.textContent = state.insightServiceAvailable
-      ? `${status.message || '本地解读服务已启用。'}${store.insightCount ? ` 已缓存${store.insightCount}个项目，重复打开不会再次占用算力。` : ' 尚未生成缓存。'}`
-      : '请使用 node server.mjs 或 start-openradar.cmd 启动，才能调用本地Ollama并保存解读。';
+      ? `${status.message || tt('watch.insightEnabled')}${store.insightCount ? tt('status.insightCacheCount', { count: store.insightCount }) : tt('status.insightNoCache')}`
+      : tt('status.insightStaticNeed');
   }
 }
 
@@ -1594,42 +1643,43 @@ function renderInsightDetails(project, insight, { loading = false, error = '' } 
   if (!project || !els.insightContent) return;
   const value = insight || {
     summary: rulePlainSummary(project),
-    whatItDoes: project.description || '项目简介不足，需要阅读README进一步判断。',
-    bestFor: `适合关注${categoryLabel(project.category || classifyCategory(project), state.locale)}、准备做技术选型或寻找开源底座的人。`,
-    useMode: inferUseTypes(project).map((type) => useTypeLabels[type] || type).join('；'),
+    whatItDoes: project.description || tt('insight.ruleWhat'),
+    bestFor: tt('rule.bestFor', { category: categoryLabel(project.category || classifyCategory(project), state.locale) }),
+    useMode: inferUseTypes(project).map((type) => tt(`useType.${type}`) || type).join('；'),
     commercial: commercialFriendly(project.license)
-      ? `${project.license}通常较适合商业使用，但仍需复核许可证原文和第三方素材。`
-      : `${project.license || '许可证待核查'}不能直接认定可商用。`,
-    requirements: `${project.language ? `主要技术：${project.language}。` : ''}安装方式、硬件要求和外部服务依赖需要查看README。`,
-    codexValue: '可以先让Codex检查目录结构、依赖、许可证和核心模块，再决定Fork、抽取组件或只参考设计。',
-    fitForUser: '与优先复用开源、由Codex实施的工作方式存在一定匹配度；是否现在投入仍需看接入成本。',
-    risks: ['当前是规则摘要，不等同于完整README、代码和许可证审计。'],
-    recommendation: '先收藏并阅读项目主页；确认真实可用后再交给Codex审计。',
+      ? tt('rule.commercialFriendly', { license: project.license })
+      : tt('rule.commercialUnknown', { license: project.license || tt('card.licenseUnknown') }),
+    requirements: `${project.language ? tt('rule.mainTech', { language: project.language }) : ''}${tt('rule.requirementsNote')}`,
+    codexValue: tt('rule.codexValueLong'),
+    fitForUser: tt('rule.fitFallback'),
+    risks: [tt('rule.riskFallbackLong')],
+    recommendation: tt('rule.recommendLong'),
     source: 'rule-fallback',
     confidence: 'low',
   };
-  const source = value.source === 'ollama' ? `本地AI · ${value.model || 'Ollama'}` : '免费规则摘要';
-  const confidence = { high: '较高', medium: '中等', low: '较低' }[value.confidence] || '中等';
+  const source = value.source === 'ollama' ? tt('insight.sourceAiLabel', { model: value.model || 'Ollama' }) : tt('insight.sourceRule');
+  const confidenceMap = { high: tt('insight.confidenceHigh'), medium: tt('insight.confidenceMedium'), low: tt('insight.confidenceLow') };
+  const confidence = confidenceMap[value.confidence] || tt('insight.confidenceMedium');
   const risks = Array.isArray(value.risks) && value.risks.length
-    ? `<section><h3>主要风险</h3><ul>${value.risks.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></section>`
+    ? `<section><h3>${tt('insight.risks')}</h3><ul>${value.risks.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></section>`
     : '';
   els.insightContent.innerHTML = `
     ${error ? `<div class="insight-error">${escapeHtml(error)}</div>` : ''}
-    <div class="insight-summary"><span>${escapeHtml(source)} · 置信度${escapeHtml(confidence)}</span><strong>${escapeHtml(value.summary || rulePlainSummary(project))}</strong><small>${value.readmeUsed ? '已读取README节选' : '未读取README或仅使用元数据'}${value.generatedAt ? ` · ${escapeHtml(timeAgo(value.generatedAt))}生成` : ''}</small></div>
+    <div class="insight-summary"><span>${escapeHtml(source)} · ${tt('insight.confidence', { level: escapeHtml(confidence) })}</span><strong>${escapeHtml(value.summary || rulePlainSummary(project))}</strong><small>${value.readmeUsed ? tt('insight.readmeUsed') : tt('insight.readmeUnused')}${value.generatedAt ? tt('insight.generatedAt', { time: escapeHtml(timeAgo(value.generatedAt)) }) : ''}</small></div>
     <div class="insight-sections">
-      ${insightSection('它到底是干什么的', value.whatItDoes)}
-      ${insightSection('适合谁', value.bestFor)}
-      ${insightSection('怎么使用或接入', value.useMode)}
-      ${insightSection('许可证与商业使用', value.commercial)}
-      ${insightSection('运行门槛', value.requirements)}
-      ${insightSection('交给Codex有什么价值', value.codexValue)}
-      ${insightSection('对你的适配度', value.fitForUser)}
+      ${insightSection(tt('insight.whatItDoes'), value.whatItDoes)}
+      ${insightSection(tt('insight.bestFor'), value.bestFor)}
+      ${insightSection(tt('insight.useMode'), value.useMode)}
+      ${insightSection(tt('insight.commercial'), value.commercial)}
+      ${insightSection(tt('insight.requirements'), value.requirements)}
+      ${insightSection(tt('insight.codexValue'), value.codexValue)}
+      ${insightSection(tt('insight.fitForUser'), value.fitForUser)}
       ${risks}
-      ${insightSection('最终建议', value.recommendation)}
+      ${insightSection(tt('insight.recommendation'), value.recommendation)}
     </div>`;
   els.insightLoading.hidden = !loading;
   els.regenerateInsight.disabled = loading || !state.insightServiceAvailable;
-  els.regenerateInsight.textContent = loading ? '正在生成…' : '重新生成';
+  els.regenerateInsight.textContent = loading ? tt('insight.generating') : tt('insight.regenerate');
 }
 
 async function generateProjectInsight(project, force = false) {
@@ -1649,10 +1699,10 @@ async function generateProjectInsight(project, force = false) {
   if (document.getElementById('packagesView')?.classList.contains('active')) renderPackageRadar();
   if (document.getElementById('compareView')?.classList.contains('active')) renderCompare();
     await loadInsightStatus(false);
-    toast(insight.source === 'ollama' ? (insight.cached ? '已读取本地AI缓存' : '中文解读已生成并缓存') : '本地AI未就绪，已显示规则摘要');
+    toast(insight.source === 'ollama' ? (insight.cached ? tt('insight.cachedRead') : tt('insight.generatedCached')) : tt('insight.offlineRule'));
   } catch (error) {
     renderInsightDetails(project, state.insights[project.id], { error: readableError(error) });
-    toast(`中文解读失败：${readableError(error)}`);
+    toast(tt('insight.failed', { error: readableError(error) }));
   }
 }
 
@@ -1660,8 +1710,17 @@ function openInsightDialog(id) {
   const project = findProject(id);
   if (!project) return;
   state.activeInsightId = projectKey(project);
-  els.insightTitle.textContent = `中文解读 · ${project.name}`;
-  els.insightSubtitle.textContent = `${project.sourceCount > 1 ? `${project.sourceCount}个平台来源 · ` : ''}${platformMeta(project).label} · ${project.owner || '未知作者'} · ${project.license || '许可证待核查'}`;
+  els.insightTitle.textContent = tt('insight.title', { name: project.name });
+  els.insightSubtitle.textContent = project.sourceCount > 1 ? tt('insight.subtitleMulti', {
+    count: project.sourceCount,
+    platform: platformMeta(project).label,
+    owner: project.owner || tt('detail.unknownOwner'),
+    license: project.license || tt('card.licenseUnknown'),
+  }) : tt('insight.subtitleSingle', {
+    platform: platformMeta(project).label,
+    owner: project.owner || tt('detail.unknownOwner'),
+    license: project.license || tt('card.licenseUnknown'),
+  });
   const insight = projectInsight(project);
   renderInsightDetails(project, insight);
   els.insightDialog.showModal();
@@ -1704,7 +1763,7 @@ async function radar(force = false) {
       state.projects = dedupeEntities(state.rawProjects);
       state.sourceStatus = cached.sourceStatus || {};
       state.packageSourceStatus = Object.fromEntries(['npm','pypi','crates'].map((id) => [id, state.sourceStatus[id] || sourceStatusEntry('empty')]));
-      els.status.textContent = '本地缓存 · 点击刷新可重新扫描';
+      els.status.textContent = tt('radar.statusCached');
       els.status.className = 'live';
       renderSourceHealth(els.sourceHealth, state.sourceStatus);
       renderRadar();
@@ -1715,7 +1774,7 @@ async function radar(force = false) {
     }
   }
 
-  els.status.textContent = `正在查询${platformIds.length}个平台的免费公开接口…`;
+  els.status.textContent = tt('radar.statusLoading', { count: platformIds.length });
   els.status.className = '';
   els.projectGrid.innerHTML = '<div class="card skeleton"></div>'.repeat(6);
   state.sourceStatus = Object.fromEntries(platformIds.map((platformId) => [platformId, sourceStatusEntry('loading')]));
@@ -1735,7 +1794,7 @@ async function radar(force = false) {
         projects.length ? 'live' : 'empty',
         projects.length,
         warning,
-        fallback ? '搜索回退' : cached?.sourceCacheStatus === 'stale' ? '过期缓存（非实时）' : cached?.sourceCacheStatus === 'fresh' ? '服务端缓存（非实时）' : cached?.sourceCacheStatus === 'revalidated' ? '已重新验证' : '',
+        fallback ? tt('search.badgeFallback') : cached?.sourceCacheStatus === 'stale' ? tt('search.badgeStale') : cached?.sourceCacheStatus === 'fresh' ? tt('search.badgeFresh') : cached?.sourceCacheStatus === 'revalidated' ? tt('search.badgeRevalidated') : '',
       );
     } else if (response.reason?.degraded) {
       state.sourceStatus[platformId] = sourceStatusEntry('empty', 0, readableError(response.reason), response.reason.badge || '外部搜索');
@@ -1752,10 +1811,10 @@ async function radar(force = false) {
   if (liveProjects.length) saveRadarCache(state.rawProjects, state.sourceStatus);
   const liveCount = Object.values(state.sourceStatus).filter((status) => status.state === 'live').length;
   const failedCount = Object.values(state.sourceStatus).filter((status) => status.state === 'error').length;
-  const searchOnlyCount = Object.values(state.sourceStatus).filter((status) => status.badge === '外部搜索').length;
+  const searchOnlyCount = Object.values(state.sourceStatus).filter((status) => status.badge === '外部搜索' || status.badge === tt('search.platformSearchOnly')).length;
   els.status.textContent = liveProjects.length
-    ? `实时数据 · ${liveCount}/${platformIds.length} 平台${searchOnlyCount ? ` · ${searchOnlyCount}个搜索入口` : ''}${failedCount ? ` · ${failedCount}个故障` : ''}`
-    : '公开接口暂不可用，显示种子数据';
+    ? tt('radar.statusLive', { live: liveCount, total: platformIds.length, searchEntry: searchOnlyCount ? tt('radar.searchEntry', { count: searchOnlyCount }) : '', failed: failedCount ? tt('radar.failed', { count: failedCount }) : '' })
+    : tt('radar.statusFallback');
   els.status.className = liveProjects.length ? (failedCount ? 'warn' : 'live') : 'warn';
   renderSourceHealth(els.sourceHealth, state.sourceStatus);
   state.packageSourceStatus = Object.fromEntries(['npm','pypi','crates'].map((id) => [id, state.sourceStatus[id] || sourceStatusEntry('empty')]));
@@ -1819,12 +1878,12 @@ async function searchProjects(query) {
     .filter((platformId) => platformCatalog[platformId]);
 
   if (!selectedPlatforms.length) {
-    toast('请至少选择一个数据源');
+    toast(tt('search.chooseSource'));
     return;
   }
 
   state.searchSourceStatus = Object.fromEntries(selectedPlatforms.map((platformId) => [platformId, sourceStatusEntry('loading')]));
-  els.searchSummary.textContent = `正在理解需求并查询 ${selectedPlatforms.length} 个平台…`;
+  els.searchSummary.textContent = tt('search.analyzing', { count: selectedPlatforms.length });
   els.searchGrid.innerHTML = '<div class="card skeleton"></div>'.repeat(4);
   els.searchFallbacks.innerHTML = '';
   renderSourceHealth(els.searchSources, state.searchSourceStatus);
@@ -1855,7 +1914,7 @@ async function searchProjects(query) {
     if (response.status === 'fulfilled') {
       projects.push(...response.value.projects);
       const messages = [
-        response.value.partialError ? `部分查询失败：${readableError(response.value.partialError)}` : '',
+        response.value.partialError ? tt('search.partial', { error: readableError(response.value.partialError) }) : '',
         response.value.sourceWarning,
       ].filter(Boolean).join('；');
       state.searchSourceStatus[platformId] = sourceStatusEntry(
@@ -1878,12 +1937,12 @@ async function searchProjects(query) {
   state.results = dedupeEntities(state.rawResults);
   sortSearchResults();
 
-  const expanded = plan.terms.length ? `已扩展关键词：${plan.terms.slice(0, 10).join(' · ')}。` : '';
+  const expanded = plan.terms.length ? tt('search.expanded', { terms: plan.terms.slice(0, 10).join(' · ') }) : '';
   const failedPlatforms = selectedPlatforms.filter((platformId) => state.searchSourceStatus[platformId]?.state === 'error');
   const searchOnlyPlatforms = selectedPlatforms.filter((platformId) => state.searchSourceStatus[platformId]?.badge === '外部搜索');
   const fallbackPlatforms = selectedPlatforms.filter((platformId) => ['error', 'empty'].includes(state.searchSourceStatus[platformId]?.state));
   const dedupStats = deduplicationStats(state.rawResults, state.results);
-  els.searchSummary.textContent = `“${query}” 找到 ${dedupStats.entityCount} 个项目实体${dedupStats.mergedSourceCount ? `，合并了 ${dedupStats.mergedSourceCount} 条跨平台重复来源` : ''}。${expanded}${searchOnlyPlatforms.length ? `${searchOnlyPlatforms.map((platformId) => platformCatalog[platformId].label).join('、')} 仅提供外部搜索入口。` : ''}${failedPlatforms.length ? `${failedPlatforms.map((platformId) => platformCatalog[platformId].label).join('、')} 当前故障。` : ''}许可证需在正式采用前再次核查。`;
+  els.searchSummary.textContent = `${tt('search.found', { query, count: dedupStats.entityCount, merged: dedupStats.mergedSourceCount ? tt('search.merged', { count: dedupStats.mergedSourceCount }) : '' })}${expanded}${searchOnlyPlatforms.length ? tt('search.searchOnly', { platforms: searchOnlyPlatforms.map((platformId) => platformCatalog[platformId].label).join('、') }) : ''}${failedPlatforms.length ? tt('search.failed', { platforms: failedPlatforms.map((platformId) => platformCatalog[platformId].label).join('、') }) : ''}${tt('search.licenseNote')}`;
   renderSourceHealth(els.searchSources, state.searchSourceStatus);
   renderSearchFallbacks(query, fallbackPlatforms);
   renderResults();
@@ -1893,7 +1952,7 @@ async function searchProjects(query) {
 function renderSearchFallbacks(query, failedPlatforms) {
   els.searchFallbacks.innerHTML = failedPlatforms.map((platformId) => {
     const meta = platformCatalog[platformId];
-    return `<a class="chip fallback" href="${escapeHtml(meta.fallbackUrl(query))}" target="_blank" rel="noopener">直接去 ${escapeHtml(meta.label)} 搜索</a>`;
+    return `<a class="chip fallback" href="${escapeHtml(meta.fallbackUrl(query))}" target="_blank" rel="noopener">${tt('search.fallback', { platform: escapeHtml(meta.label) })}</a>`;
   }).join('');
 }
 
@@ -1909,7 +1968,7 @@ function sortSearchResults() {
 function renderResults() {
   els.searchGrid.innerHTML = state.results.length
     ? state.results.map((project) => projectCard(project)).join('')
-    : '<div class="empty"><h3>没有找到结果</h3><p>系统已经尝试中文需求扩展；可以减少限制词或换一个用途描述。</p></div>';
+    : `<div class="empty"><h3>${tt('search.empty')}</h3><p>${tt('search.emptyHint')}</p></div>`;
   bindProjectActions(els.searchGrid);
 }
 
@@ -1918,18 +1977,18 @@ async function detectRuntimeMode() {
   if (!els.runtimeMode || !els.runtimeDetail) return;
   try {
     const response = await fetch('/api/health', { cache: 'no-store' });
-    if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) throw new Error('静态服务器');
+    if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) throw new Error(tt('errors.staticServer'));
     const health = await response.json();
-    if (!health.giteeProxy) throw new Error('兼容通道未启用');
+    if (!health.giteeProxy) throw new Error(tt('status.channelDisabled'));
     state.codexExportAvailable = Boolean(health.codexExport);
     state.identityServiceAvailable = Boolean(health.identityCorrections);
     state.trustServiceAvailable = Boolean(health.trust);
     state.backupAvailable = Boolean(health.backup);
     state.packageServiceAvailable = Boolean(health.packages);
-    els.runtimeMode.textContent = '● 本地兼容服务';
+    els.runtimeMode.textContent = tt('status.runtimeLive');
     els.runtimeMode.className = 'runtime-live';
-    const githubAuthMode = health.upstream?.providers?.github?.authMode === 'authenticated' ? 'GitHub已认证' : 'GitHub匿名';
-    els.runtimeDetail.textContent = health.insights ? `代码、模型与软件包生态 · ${githubAuthMode} · 历史、本地AI、可信度、完整备份与${health.codexExport ? 'Codex研究包' : '浏览器研究提示词'}` : `代码、模型与软件包生态 · ${githubAuthMode} · 跨平台纠错 · 本地历史与完整备份`;
+    const githubAuthMode = health.upstream?.providers?.github?.authMode === 'authenticated' ? tt('status.githubAuth') : tt('status.githubAnon');
+    els.runtimeDetail.textContent = health.insights ? tt('status.runtimeDetailFull', { auth: githubAuthMode, packet: health.codexExport ? tt('status.packet') : tt('status.browserPrompt') }) : tt('status.runtimeDetailNoInsight', { auth: githubAuthMode });
     renderServiceStatuses();
     if (state.identityServiceAvailable) await loadIdentityOverridesFromServer();
   } catch {
@@ -1939,18 +1998,20 @@ async function detectRuntimeMode() {
     state.backupAvailable = false;
     state.packageServiceAvailable = false;
     renderServiceStatuses();
-    els.runtimeMode.textContent = '● 静态模式';
+    els.runtimeMode.textContent = tt('status.runtimeStatic');
     els.runtimeMode.className = 'runtime-warn';
-    els.runtimeDetail.textContent = '静态数据可浏览 · 软件包、历史、Gitee与本地AI请改用 node server.mjs';
+    els.runtimeDetail.textContent = tt('status.runtimeStaticDetail');
   }
 }
 
 function init() {
   applyDocumentLanguage(document, state.locale);
+  applyStaticI18n();
+  bindLocaleSwitch();
   detectRuntimeMode();
   void loadInsightStatus(false).then(() => loadCachedInsights([...state.projects, ...state.favorites]));
   renderCategories();
-  els.suggestions.innerHTML = suggestions.map((query) => `<button class="chip" data-query="${escapeHtml(query)}">${escapeHtml(query)}</button>`).join('');
+  els.suggestions.innerHTML = suggestions.map((key) => `<button class="chip" data-query="${escapeHtml(tt(`suggestions.${key}`))}">${escapeHtml(tt(`suggestions.${key}`))}</button>`).join('');
 
   document.querySelectorAll('.nav').forEach((button) => {
     button.onclick = () => {
@@ -1995,7 +2056,7 @@ function init() {
   els.searchForm.onsubmit = (event) => {
     event.preventDefault();
     const query = els.query.value.trim();
-    query ? searchProjects(query) : toast('请输入搜索需求');
+    query ? searchProjects(query) : toast(tt('search.queryEmpty'));
   };
 
   els.sort.onchange = () => {
@@ -2025,7 +2086,7 @@ function init() {
     state.favorites = [item, ...state.favorites.filter((favorite) => !entitiesOverlap(favorite, project))];
     persistFavorites();
     els.dialog.close();
-    toast('已保存到收藏库');
+    toast(tt('favorites.saved'));
   };
 
   els.closeDialog.onclick = els.cancel.onclick = () => els.dialog.close();
@@ -2037,7 +2098,7 @@ function init() {
     button.onclick = async () => {
       button.disabled = true;
       try { await exportFullBackup(); }
-      catch (error) { toast(`备份失败：${readableError(error)}`); }
+      catch (error) { toast(tt('toast.backupImportFailed', { error: readableError(error) })); }
       finally { button.disabled = false; }
     };
   });
@@ -2049,12 +2110,12 @@ function init() {
   if (els.refreshInsights) {
     els.refreshInsights.onclick = async () => {
       els.refreshInsights.disabled = true;
-      els.refreshInsights.textContent = '检测中…';
+      els.refreshInsights.textContent = tt('status.rechecking');
       await loadInsightStatus(true);
       await loadCachedInsights([...state.projects, ...state.results, ...state.favorites]);
       els.refreshInsights.disabled = false;
-      els.refreshInsights.textContent = '重新检测';
-      toast(state.insightAvailable ? 'Ollama与qwen3:4b已连接' : (state.insightStatus?.message || '本地AI未就绪'));
+      els.refreshInsights.textContent = tt('status.recheck');
+      toast(state.insightAvailable ? tt('status.insightOllamaReady') : (state.insightStatus?.message || tt('status.insightNotReady')));
     };
   }
 
@@ -2077,18 +2138,18 @@ function init() {
   if (els.packageSort) els.packageSort.onchange = renderPackageRadar;
   if (els.auditCompare) els.auditCompare.onclick = () => void auditCompareItems();
   if (els.clearCompare) els.clearCompare.onclick = () => {
-    if (!state.compareItems.length || confirm('确定清空当前项目对比吗？')) {
+    if (!state.compareItems.length || confirm(tt('compare.clearConfirm'))) {
       state.compareItems = [];
       persistCompareItems();
       renderCompare();
-      toast('项目对比已清空');
+      toast(tt('compare.cleared'));
     }
   };
 
   if (els.collectHistory) {
     els.collectHistory.onclick = async () => {
       els.collectHistory.disabled = true;
-      els.collectHistory.textContent = '采集中…';
+      els.collectHistory.textContent = tt('watch.collecting');
       try {
         await fetchJsonSafe('/api/history/collect', { method: 'POST' });
         const status = await fetchJsonSafe('/api/history/status');
@@ -2096,21 +2157,21 @@ function init() {
         state.historyAvailable = true;
         renderHistoryStatus();
         await loadHistoryGrowth(state.projects, false);
-        toast('历史快照采集完成');
+        toast(tt('watch.collected'));
       } catch (error) {
-        toast(`历史采集失败：${readableError(error)}`);
+        toast(tt('watch.collectFailed', { error: readableError(error) }));
       } finally {
         els.collectHistory.disabled = false;
-        els.collectHistory.textContent = '立即采集一次';
+        els.collectHistory.textContent = tt('watch.collect');
       }
     };
   }
 
   els.clear.onclick = () => {
-    if (state.favorites.length && confirm('确定清空全部收藏吗？')) {
+    if (state.favorites.length && confirm(tt('favorites.clearConfirm'))) {
       state.favorites = [];
       persistFavorites();
-      toast('收藏已清空');
+      toast(tt('favorites.cleared'));
     }
   };
 

@@ -20,7 +20,7 @@ import {
 import { en } from '../i18n/en.js';
 import { zhCN } from '../i18n/zh-CN.js';
 import { InsightStore } from '../insight-store.mjs';
-import { createInsightService, projectFingerprint, ruleBasedInsight } from '../insight-service.mjs';
+import { createInsightService, projectFingerprint, ruleBasedInsight, ruleBasedInsightForLocale } from '../insight-service.mjs';
 import { createOpenRadarServer } from '../server.mjs';
 
 // Locale resolution: saved > browser > fallback.
@@ -253,6 +253,86 @@ assert.notEqual(zhAgain.summary, enAgain.summary);
 const rule = ruleBasedInsight(project);
 assert.doesNotMatch(rule.fitForUser, /游戏\/AI|NVIDIA|Windows电脑/);
 assert.match(rule.fitForUser, /适用场景匹配度/);
+
+// Rule-based insight is fully localized: en has no Chinese, zh-CN is Chinese.
+const ruleEn = ruleBasedInsightForLocale(project, '', 'en');
+const ruleZh = ruleBasedInsightForLocale(project, '', 'zh-CN');
+// whatItDoes intentionally passes through the source description (class D source data).
+const ruleEnFields = [ruleEn.summary, ruleEn.bestFor, ruleEn.useMode, ruleEn.commercial, ruleEn.requirements, ruleEn.codexValue, ruleEn.fitForUser, ruleEn.recommendation, ...ruleEn.risks];
+const ruleZhFields = [ruleZh.summary, ruleZh.bestFor, ruleZh.useMode, ruleZh.commercial, ruleZh.requirements, ruleZh.codexValue, ruleZh.fitForUser, ruleZh.recommendation, ...ruleZh.risks];
+for (const field of ruleEnFields) assert.doesNotMatch(field, /[\u4e00-\u9fff]/, `en rule leaked Chinese: ${field}`);
+for (const field of ruleZhFields) assert.match(field, /[\u4e00-\u9fff]/, `zh-CN rule missing Chinese: ${field}`);
+assert.match(ruleEn.summary, /open-source project/);
+assert.match(ruleZh.summary, /开源项目/);
+assert.match(ruleEn.commercial, /MIT/);
+assert.match(ruleZh.commercial, /MIT/);
+// Reason text is localized for en (never raw Chinese server message).
+const ruleEnReason = ruleBasedInsightForLocale(project, '无法连接本地Ollama', 'en');
+assert.doesNotMatch(ruleEnReason.risks.join(' '), /[\u4e00-\u9fff]/);
+const ruleZhReason = ruleBasedInsightForLocale(project, '无法连接本地Ollama', 'zh-CN');
+assert.ok(ruleZhReason.risks.some((risk) => risk.includes('本地AI未生成')));
+
+// AI prompts carry explicit language instructions and no personal profile.
+const zhPromptBody = promptBodies.find((body) => body.messages[1].content.includes('简体中文'));
+const enPromptBody = promptBodies.find((body) => body.messages[1].content.includes('plain English'));
+assert.ok(zhPromptBody, 'zh-CN prompt missing Simplified Chinese instruction');
+assert.ok(enPromptBody, 'en prompt missing plain English instruction');
+assert.match(zhPromptBody.messages[0].content, /简体中文|结构化中文/);
+assert.match(enPromptBody.messages[0].content, /plain English/);
+assert.doesNotMatch(enPromptBody.messages[0].content, /[\u4e00-\u9fff]/);
+for (const body of promptBodies) {
+  assert.doesNotMatch(body.messages[1].content, /Windows电脑|NVIDIA|8GB显存|用户偏好|私人目录|用户身份/);
+}
+
+// Locale switch must not reuse the wrong-language insight from state.
+const switchStore = new InsightStore(join(promptRoot, 'switch.json'));
+const switchService = createInsightService({
+  store: switchStore,
+  now: () => Date.parse('2026-07-29T00:00:00Z'),
+  fetchImpl: async (url, options = {}) => {
+    const target = String(url);
+    if (target.endsWith('/api/tags')) {
+      return new Response(JSON.stringify({ models: [{ name: 'qwen3:4b' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (target.endsWith('/api/chat')) {
+      const chatBody = JSON.parse(options.body);
+      const isEnglish = /plain English/.test(chatBody.messages[1].content);
+      return new Response(JSON.stringify({
+        message: {
+          role: 'assistant',
+          content: JSON.stringify({
+            summary: isEnglish ? 'English summary' : '中文摘要',
+            whatItDoes: 'what',
+            bestFor: 'best',
+            useMode: 'use',
+            commercial: 'license',
+            requirements: 'node',
+            codexValue: 'codex',
+            fitForUser: isEnglish ? 'Use-case fit depends on your context.' : '适用场景匹配度取决于你的接入成本。',
+            risks: ['risk'],
+            recommendation: 'test',
+            confidence: 'medium',
+          }),
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (target.includes('api.github.com/repos/demo/openradar/readme')) {
+      return new Response('# OpenRadar\nREADME', { status: 200, headers: { 'Content-Type': 'text/plain' } });
+    }
+    throw new Error(`Unexpected URL: ${target}`);
+  },
+});
+const zhFirst = await switchService.generate(project, { locale: 'zh-CN' });
+const enFirst = await switchService.generate(project, { locale: 'en' });
+assert.equal(zhFirst.summary, '中文摘要');
+assert.equal(enFirst.summary, 'English summary');
+const zhCachedSwitch = await switchService.generate(project, { locale: 'zh-CN' });
+const enCachedSwitch = await switchService.generate(project, { locale: 'en' });
+assert.equal(zhCachedSwitch.cached, true);
+assert.equal(enCachedSwitch.cached, true);
+assert.equal((await switchStore.get(project.id, 'zh-CN')).summary, '中文摘要');
+assert.equal((await switchStore.get(project.id, 'en')).summary, 'English summary');
+assert.notEqual((await switchStore.get(project.id, 'zh-CN')).summary, (await switchStore.get(project.id, 'en')).summary);
 
 // Server routes pass locale through to the insight service.
 let receivedLocale = '';

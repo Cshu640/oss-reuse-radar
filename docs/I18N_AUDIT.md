@@ -192,6 +192,42 @@ of the 0T.1 foundation:
   directions, locale persistence across reload, zero page errors, and zero
   console errors; Chinese-leak audit in English mode is empty.
 
+## OSS-0T.3 bilingual rule and AI insight copy (2026-08-12)
+
+OSS-0T.3 completed the bilingual copy for generated content:
+
+- `ruleBasedInsightForLocale(project, reason, locale)` now produces fully
+  localized rule insights for `en` and `zh-CN`: summary, best-for, use mode,
+  license copy, requirements, Codex value, risks, and recommendation all
+  come from the i18n resources. `whatItDoes` intentionally passes through
+  the source description (class D source data).
+- AI prompts are locale-aware: `en` requires plain English and `zh-CN`
+  requires Simplified Chinese, with explicit neutral OSS-evaluation
+  criteria and no personal profile (no Windows/NVIDIA/device assumptions,
+  no personal projects, no private directories or identity).
+- Insight cache stays locale-isolated (`projectId::locale`); the frontend
+  now requests `/api/insights?locale=...` and sends `locale` on
+  `/api/insights/generate`, and clears the in-memory insight map when the
+  language changes so a different-language cached result is never shown for
+  the wrong locale. If that locale has no cache, the app shows the localized
+  rule summary and a "generate" action instead of another language's stale
+  result.
+- AI insight status text is generated client-side through i18n (connected,
+  model missing, unreachable, static mode) instead of displaying server-side
+  Chinese messages in English mode.
+- `fitForUser` field name unchanged; display labels remain
+  "适用场景匹配度" (zh-CN) and "Use-case Fit" (en).
+- Tests extended: en/zh rule output (en has no Chinese; zh-CN is Chinese),
+  en/zh AI prompt language instructions, en/zh cache isolation with
+  locale-switch behavior, legacy cache migration, no personal-profile
+  leakage, and translation key consistency. Node suite 31/31.
+- Browser acceptance: Playwright + system Edge with a real local server
+  (Ollama intentionally unreachable): en and zh-CN show fully localized rule
+  summaries and AI status text; switching zh-CN -> en -> zh-CN updates
+  immediately; favorites, compare, and category IDs unchanged; zero page or
+  console errors; no untranslated keys or undefined/null copy. No remote AI
+  was called; no AI success was faked.
+
 ## Security boundary
 
 No API key, token, personal directory, device configuration, telemetry, or

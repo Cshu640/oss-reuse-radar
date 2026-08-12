@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { categoryLabel, normalizeCategory } from './i18n/index.js';
+import { categoryLabel, normalizeCategory, t } from './i18n/index.js';
 
 const OLLAMA_TIMEOUT = 120_000;
 const STATUS_TIMEOUT = 3_500;
@@ -95,32 +95,32 @@ export function projectFingerprint(project) {
   return createHash('sha256').update(source).digest('hex');
 }
 
-function licenseCopy(license) {
-  if (/MIT|Apache|BSD|ISC|Unlicense/i.test(license)) return `${license}通常允许修改和商业使用，但正式发布前仍需核对许可证原文与第三方素材许可。`;
-  if (/MPL/i.test(license)) return `${license}通常允许商业使用，但修改过的相关文件可能需要继续开放，采用前应复核具体义务。`;
-  if (/AGPL/i.test(license)) return `${license}对网络服务公开源代码有较强要求，不适合未经审查就直接用于闭源SaaS。`;
-  if (/GPL/i.test(license)) return `${license}存在较强的开源传播义务，闭源商业产品采用前需要专门审查。`;
-  if (/待核查|unknown|other|custom/i.test(license)) return '许可证信息不明确，当前只能用于研究和评估，不能据此认定可商用。';
-  return `${license}需要逐条核对，尤其要确认商业使用、修改、分发、模型权重和素材许可。`;
+function licenseCopy(license, locale) {
+  if (/MIT|Apache|BSD|ISC|Unlicense/i.test(license)) return t('rule.licensePermissive', locale, { license });
+  if (/MPL/i.test(license)) return t('rule.licenseMpl', locale, { license });
+  if (/AGPL/i.test(license)) return t('rule.licenseAgpl', locale, { license });
+  if (/GPL/i.test(license)) return t('rule.licenseGpl', locale, { license });
+  if (/待核查|unknown|other|custom/i.test(license)) return t('rule.licenseUnknown', locale);
+  return t('rule.licenseOther', locale, { license });
 }
 
-function useModeCopy(project) {
+function useModeCopy(project, locale) {
   const types = new Set(project.useTypes);
   const result = [];
-  if (types.has('direct')) result.push('可以先直接安装或体验');
-  if (types.has('selfhost')) result.push('适合个人或团队自行部署');
-  if (types.has('codex')) result.push('可以交给Codex做二次开发');
-  if (types.has('component')) result.push('更像可嵌入其他项目的技术组件');
-  if (types.has('reference')) result.push('适合参考产品设计与交互');
-  if (types.has('business')) result.push('可能具备产品化或商业化空间');
-  return result.length ? result.join('；') : '需要先阅读README和安装文档，再判断是完整产品还是技术组件。';
+  if (types.has('direct')) result.push(t('rule.useModeDirect', locale));
+  if (types.has('selfhost')) result.push(t('rule.useModeSelfhost', locale));
+  if (types.has('codex')) result.push(t('rule.useModeCodex', locale));
+  if (types.has('component')) result.push(t('rule.useModeComponent', locale));
+  if (types.has('reference')) result.push(t('rule.useModeReference', locale));
+  if (types.has('business')) result.push(t('rule.useModeBusiness', locale));
+  return result.length ? result.join(t('rule.useModeJoin', locale)) : t('rule.useModeNone', locale);
 }
 
-function audienceCopy(project) {
-  const category = project.category || '相关领域';
-  if (project.useTypes.includes('direct')) return `适合希望直接使用${category}工具的个人、小团队或自托管用户。`;
-  if (project.useTypes.includes('component')) return `适合正在开发${category}产品、希望复用成熟组件而不是从零实现的开发者。`;
-  return `适合关注${category}、准备做技术选型或寻找二次开发底座的人。`;
+function audienceCopy(project, locale, category) {
+  const categoryText = category || t('rule.categoryFallback', locale);
+  if (project.useTypes.includes('direct')) return t('rule.bestForDirect', locale, { category: categoryText });
+  if (project.useTypes.includes('component')) return t('rule.bestForComponent', locale, { category: categoryText });
+  return t('rule.bestForGeneral', locale, { category: categoryText });
 }
 
 export function ruleBasedInsight(projectValue, reason = '') {
@@ -129,19 +129,23 @@ export function ruleBasedInsight(projectValue, reason = '') {
 
 export function ruleBasedInsightForLocale(projectValue, reason = '', locale = 'zh-CN') {
   const project = normalizeProjectInput(projectValue);
-  const category = normalizeCategory(project.category);
-  const categoryText = categoryLabel(category, locale);
-  const subject = project.description || `${categoryText}开源项目`;
-  const summary = `${project.name || '这个项目'}是一个${category ? `偏${categoryText}的` : ''}开源项目，主要用途是：${subject.replace(/[。.!！]+$/u, '')}。`;
+  const hasCategory = Boolean(project.category) && normalizeCategory(project.category) !== 'all';
+  const category = hasCategory ? normalizeCategory(project.category) : '';
+  const categoryText = hasCategory ? categoryLabel(category, locale) : '';
+  const name = project.name || t('rule.nameFallback', locale);
+  const subject = project.description || (hasCategory ? t('rule.subjectFallback', locale, { category: categoryText }) : t('rule.subjectFallbackGeneric', locale));
+  const summary = hasCategory
+    ? t('rule.summaryMain', locale, { name, category: t('rule.categoryPrefix', locale, { category: categoryText }), subject: subject.replace(/[。.!！]+$/u, '') })
+    : t('rule.summaryMainNoCategory', locale, { name, subject: subject.replace(/[。.!！]+$/u, '') });
   const requirements = [
-    project.language ? `主要技术或框架：${project.language}` : '主要技术栈尚未识别',
-    project.platform ? `来源平台：${project.platform}` : '',
-    '安装方式、系统要求、内存/显存与外部服务依赖仍需查看README确认',
-  ].filter(Boolean).join('；');
+    project.language ? t('rule.requirementsTech', locale, { language: project.language }) : t('rule.requirementsUnknown', locale),
+    project.platform ? t('rule.requirementsPlatform', locale, { platform: project.platform }) : '',
+    t('rule.requirementsReadme', locale),
+  ].filter(Boolean).join(t('rule.useModeJoin', locale));
   const risks = [
-    '当前结论主要根据项目元数据和简介生成，尚未等同于完整代码审计。',
-    /待核查|unknown|other|custom/i.test(project.license) ? '许可证尚未确认，不应直接用于商业发布。' : '即使许可证看起来友好，也要复核第三方依赖、模型和素材许可。',
-    reason ? `本地AI未生成：${reason}` : '',
+    t('rule.riskMetadata', locale),
+    /待核查|unknown|other|custom/i.test(project.license) ? t('rule.riskLicenseUnknown', locale) : t('rule.riskLicenseFriendly', locale),
+    reason ? (locale === 'en' ? t('rule.reasonNotGenerated', locale) : t('rule.reasonNotGeneratedDetail', locale, { reason })) : '',
   ].filter(Boolean);
   return {
     projectId: project.id,
@@ -151,21 +155,21 @@ export function ruleBasedInsightForLocale(projectValue, reason = '', locale = 'z
     generatedAt: new Date().toISOString(),
     readmeUsed: false,
     summary,
-    whatItDoes: project.description || '项目简介不足，需要进入项目主页阅读README、Demo和Release记录。',
-    bestFor: audienceCopy(project),
-    useMode: useModeCopy(project),
-    commercial: licenseCopy(project.license),
+    whatItDoes: project.description || t('rule.whatItDoesFallback', locale),
+    bestFor: audienceCopy(project, locale, categoryText),
+    useMode: useModeCopy(project, locale),
+    commercial: licenseCopy(project.license, locale),
     requirements,
     codexValue: project.useTypes.includes('codex') || project.useTypes.includes('component')
-      ? '可以先让Codex审计目录结构、许可证、依赖和核心模块，再决定Fork、抽取组件还是只参考实现。'
-      : 'Codex可用于检查安装方法、部署流程和是否存在可复用模块，但不一定需要直接Fork。',
+      ? t('rule.codexValueYes', locale)
+      : t('rule.codexValueNo', locale),
     fitForUser: locale === 'en'
       ? 'Use-case fit depends on your integration cost, maintenance state, and current priorities; compare scores and trust signals before investing.'
       : '适用场景匹配度：取决于你的接入成本、维护状态和当前主线；建议结合评分与Trust信号判断后再投入。',
     risks,
     recommendation: project.useTypes.includes('direct')
-      ? '先收藏并直接体验，确认真实好用后再考虑二次开发。'
-      : '先收藏，交给Codex做一次轻量技术与许可证审计，不要立即大规模接入。',
+      ? t('rule.recommendDirect', locale)
+      : t('rule.recommendCodex', locale),
     confidence: project.description ? 'medium' : 'low',
   };
 }

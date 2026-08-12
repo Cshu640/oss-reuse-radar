@@ -13,39 +13,43 @@
 <body>
   <div class="shell">
     <aside id="sidebar">
-      <div class="brand"><b>OR</b><div><strong>OpenRadar</strong><small>开源项目雷达</small></div></div>
+      <div class="brand"><b>OR</b><div><strong>OpenRadar</strong><small data-i18n="brand.tagline">开源项目雷达</small></div></div>
       <nav>
-        <button class="nav active" data-view="radar">◉ 今日雷达</button>
-        <button class="nav" data-view="search">⌕ 灵感搜索</button>
-        <button class="nav" data-view="favorites">★ 我的收藏 <i id="favoriteCount">0</i></button>
-        <button class="nav" data-view="packages">▣ 软件包生态</button>
-        <button class="nav" data-view="compare">▦ 项目对比 <i id="compareCount">0</i></button>
-        <button class="nav" data-view="watch">◌ 观察名单</button>
+        <button class="nav active" data-view="radar"><span data-i18n="nav.radar">今日雷达</span></button>
+        <button class="nav" data-view="search"><span data-i18n="nav.search">灵感搜索</span></button>
+        <button class="nav" data-view="favorites"><span data-i18n="nav.favorites">我的收藏</span> <i id="favoriteCount">0</i></button>
+        <button class="nav" data-view="packages"><span data-i18n="nav.packages">软件包生态</span></button>
+        <button class="nav" data-view="compare"><span data-i18n="nav.compare">项目对比</span> <i id="compareCount">0</i></button>
+        <button class="nav" data-view="watch"><span data-i18n="nav.watch">观察名单</span></button>
       </nav>
-      <p class="side-title">兴趣分类</p>
+      <p class="side-title" data-i18n="nav.categories">兴趣分类</p>
       <div id="categories"></div>
-      <footer><span id="runtimeMode">● 检测运行模式</span><small id="runtimeDetail">GitHub · Hugging Face · GitLab · Codeberg · Gitee · ModelScope · npm · PyPI · crates.io</small></footer>
+      <div class="locale-switch" role="group" aria-label="Language">
+        <button id="localeZh" type="button" data-locale="zh-CN" aria-pressed="true">简体中文</button>
+        <button id="localeEn" type="button" data-locale="en" aria-pressed="false">English</button>
+      </div>
+      <footer><span id="runtimeMode" data-i18n="status.runtimeDetecting">● 检测运行模式</span><small id="runtimeDetail">GitHub · Hugging Face · GitLab · Codeberg · Gitee · ModelScope · npm · PyPI · crates.io</small></footer>
     </aside>
 
     <main>
       <header>
         <button id="menu">☰</button>
-        <div class="quick"><span>⌕</span><input id="quickSearch" placeholder="你现在需要什么开源项目？"><kbd>Enter</kbd></div>
-        <button id="refresh">刷新雷达</button>
-        <button id="install" class="primary" hidden>安装到桌面</button>
+        <div class="quick"><span>⌕</span><input id="quickSearch" placeholder="你现在需要什么开源项目？" data-i18n-placeholder="header.quickPlaceholder"><kbd>Enter</kbd></div>
+        <button id="refresh" data-i18n="header.refresh">刷新雷达</button>
+        <button id="install" class="primary" hidden data-i18n="header.install">安装到桌面</button>
       </header>
 
       <section id="radarView" class="view active">
         <div class="hero">
-          <div><em>OPEN-SOURCE INTELLIGENCE</em><h1>今天有哪些项目<br>值得立即关注？</h1><p>跨平台发现、真实增长、免费中文大白话、许可证判断、收藏与后续接入建议。</p></div>
-          <div class="metrics"><div><b id="candidateMetric">—</b><span>项目实体</span></div><div><b id="mergedMetric">—</b><span>已合并重复来源</span></div><div><b id="freshMetric">—</b><span>30天内新项目</span></div><div><b id="savedMetric">0</b><span>已收藏</span></div></div>
+          <div><em data-i18n="hero.eyebrow">OPEN-SOURCE INTELLIGENCE</em><h1><span data-i18n="hero.titleLine1">今天有哪些项目</span><br><span data-i18n="hero.titleLine2">值得立即关注？</span></h1><p data-i18n="hero.desc">跨平台发现、真实增长、免费中文大白话、许可证判断、收藏与后续接入建议。</p></div>
+          <div class="metrics"><div><b id="candidateMetric">—</b><span data-i18n="metrics.candidates">项目实体</span></div><div><b id="mergedMetric">—</b><span data-i18n="metrics.merged">已合并重复来源</span></div><div><b id="freshMetric">—</b><span data-i18n="metrics.fresh">30天内新项目</span></div><div><b id="savedMetric">0</b><span data-i18n="metrics.saved">已收藏</span></div></div>
         </div>
         <div class="toolbar">
-          <div class="tabs"><button class="tab active" data-period="today">24小时增长</button><button class="tab" data-period="week">7天增长</button><button class="tab" data-period="month">30天增长</button><button class="tab" data-period="rising">低 Star 高潜力</button></div>
+          <div class="tabs"><button class="tab active" data-period="today"><span data-i18n="period.today">24小时增长</span></button><button class="tab" data-period="week"><span data-i18n="period.week">7天增长</span></button><button class="tab" data-period="month"><span data-i18n="period.month">30天增长</span></button><button class="tab" data-period="rising"><span data-i18n="period.rising">低 Star 高潜力</span></button></div>
           <div class="filters">
-            <select id="platform"><option value="all">全部平台</option><option value="github">GitHub</option><option value="huggingface">Hugging Face</option><option value="gitlab">GitLab</option><option value="codeberg">Codeberg</option><option value="gitee">Gitee</option><option value="modelscope">ModelScope</option><option value="npm">npm</option><option value="pypi">PyPI</option><option value="crates">crates.io</option></select>
-            <select id="license"><option value="all">全部许可证</option><option value="commercial">优先可商用</option><option value="unknown">待核查</option></select>
-            <select id="useType"><option value="all">全部用途</option><option value="direct">直接安装使用</option><option value="selfhost">适合个人部署</option><option value="codex">Codex二次开发</option><option value="component">技术组件</option><option value="reference">模仿产品设计</option><option value="business">商业化机会</option></select>
+            <select id="platform"><option value="all" data-i18n="filter.allPlatforms">全部平台</option><option value="github">GitHub</option><option value="huggingface">Hugging Face</option><option value="gitlab">GitLab</option><option value="codeberg">Codeberg</option><option value="gitee">Gitee</option><option value="modelscope">ModelScope</option><option value="npm">npm</option><option value="pypi">PyPI</option><option value="crates">crates.io</option></select>
+            <select id="license"><option value="all" data-i18n="filter.allLicenses">全部许可证</option><option value="commercial" data-i18n="filter.commercial">优先可商用</option><option value="unknown" data-i18n="filter.unknownLicense">待核查</option></select>
+            <select id="useType"><option value="all" data-i18n="filter.allUseTypes">全部用途</option><option value="direct" data-i18n="useType.direct">直接安装使用</option><option value="selfhost" data-i18n="useType.selfhost">适合个人部署</option><option value="codex" data-i18n="useType.codex">Codex二次开发</option><option value="component" data-i18n="useType.component">技术组件</option><option value="reference" data-i18n="useType.reference">模仿产品设计</option><option value="business" data-i18n="useType.business">商业化机会</option></select>
           </div>
         </div>
         <div class="section-title"><div><h2 id="radarTitle">24小时增长</h2><p id="radarDesc">正在检测本地历史快照；没有足够基线时会明确显示“积累中”。</p></div><span id="status">准备加载</span></div>
@@ -54,10 +58,10 @@
       </section>
 
       <section id="searchView" class="view">
-        <div class="page-title"><em>INSPIRATION SEARCH</em><h1>有灵感，马上跨平台搜索</h1><p>输入中文自然语言需求，自动扩展为英文技术关键词，再并行搜索代码、模型与软件包生态；Gitee受限时提供外部搜索入口。</p></div>
+        <div class="page-title"><em data-i18n="search.eyebrow">INSPIRATION SEARCH</em><h1 data-i18n="search.title">有灵感，马上跨平台搜索</h1><p data-i18n="search.desc">输入中文自然语言需求，自动扩展为英文技术关键词，再并行搜索代码、模型与软件包生态；Gitee受限时提供外部搜索入口。</p></div>
         <form id="searchForm" class="search-box">
-          <textarea id="query" placeholder="例如：寻找适合网页游戏、允许商用、TypeScript可接入的NPC长期记忆系统"></textarea>
-          <div class="search-controls"><div class="source-select"><label><input type="checkbox" data-search-platform="github" checked> GitHub</label><label><input type="checkbox" data-search-platform="huggingface" checked> Hugging Face</label><label><input type="checkbox" data-search-platform="gitlab" checked> GitLab</label><label><input type="checkbox" data-search-platform="codeberg" checked> Codeberg</label><label title="公开搜索接口可能不稳定"><input type="checkbox" data-search-platform="gitee" checked> Gitee <small>受限</small></label><label><input type="checkbox" data-search-platform="modelscope" checked> ModelScope</label><label><input type="checkbox" data-search-platform="npm" checked> npm</label><label><input type="checkbox" data-search-platform="pypi" checked> PyPI</label><label><input type="checkbox" data-search-platform="crates" checked> crates.io</label></div><select id="sort"><option value="score">综合潜力</option><option value="popular">Star / Like</option><option value="fresh">最近更新</option></select><button class="primary">开始搜索</button></div>
+          <textarea id="query" placeholder="例如：寻找适合网页游戏、允许商用、TypeScript可接入的NPC长期记忆系统" data-i18n-placeholder="search.placeholder"></textarea>
+          <div class="search-controls"><div class="source-select"><label><input type="checkbox" data-search-platform="github" checked> GitHub</label><label><input type="checkbox" data-search-platform="huggingface" checked> Hugging Face</label><label><input type="checkbox" data-search-platform="gitlab" checked> GitLab</label><label><input type="checkbox" data-search-platform="codeberg" checked> Codeberg</label><label title="公开搜索接口可能不稳定"><input type="checkbox" data-search-platform="gitee" checked> Gitee <small data-i18n="search.limited">受限</small></label><label><input type="checkbox" data-search-platform="modelscope" checked> ModelScope</label><label><input type="checkbox" data-search-platform="npm" checked> npm</label><label><input type="checkbox" data-search-platform="pypi" checked> PyPI</label><label><input type="checkbox" data-search-platform="crates" checked> crates.io</label></div><select id="sort"><option value="score" data-i18n="sort.score">综合潜力</option><option value="popular" data-i18n="sort.popular">Star / Like</option><option value="fresh" data-i18n="sort.fresh">最近更新</option></select><button class="primary" data-i18n="search.start">开始搜索</button></div>
         </form>
         <div id="suggestions" class="chips"></div>
         <p id="searchSummary"></p>
@@ -67,30 +71,30 @@
       </section>
 
       <section id="favoritesView" class="view">
-        <div class="page-title split"><div><em>PERSONAL LIBRARY</em><h1>我的收藏</h1><p>保存项目、添加标签与备注，记录下一步动作。</p></div><div class="backup-actions"><button id="export">仅导出收藏</button><button id="exportBackup" class="primary">完整备份</button><button id="importBackup">导入备份</button><input id="backupFile" type="file" accept="application/json,.json" hidden><button id="clear" class="danger">清空收藏</button></div></div>
-        <div class="favorite-tools"><input id="favoriteSearch" placeholder="搜索项目、分类、用途、标签或备注"><select id="tagFilter"><option value="all">全部标签</option></select></div>
-        <div id="favoriteEmpty" class="empty" hidden><b>☆</b><h3>还没有收藏</h3><p>点击项目卡片右上角星标即可收藏。</p></div>
+        <div class="page-title split"><div><em data-i18n="favorites.eyebrow">PERSONAL LIBRARY</em><h1 data-i18n="favorites.title">我的收藏</h1><p data-i18n="favorites.desc">保存项目、添加标签与备注，记录下一步动作。</p></div><div class="backup-actions"><button id="export" data-i18n="favorites.export">仅导出收藏</button><button id="exportBackup" class="primary" data-i18n="favorites.backup">完整备份</button><button id="importBackup" data-i18n="favorites.import">导入备份</button><input id="backupFile" type="file" accept="application/json,.json" hidden><button id="clear" class="danger" data-i18n="favorites.clear">清空收藏</button></div></div>
+        <div class="favorite-tools"><input id="favoriteSearch" placeholder="搜索项目、分类、用途、标签或备注" data-i18n-placeholder="favorites.searchPlaceholder"><select id="tagFilter"><option value="all" data-i18n="filter.allTags">全部标签</option></select></div>
+        <div id="favoriteEmpty" class="empty" hidden><b>☆</b><h3 data-i18n="favorites.emptyTitle">还没有收藏</h3><p data-i18n="favorites.emptyHint">点击项目卡片右上角星标即可收藏。</p></div>
         <div id="favoriteGrid" class="grid"></div>
       </section>
 
       <section id="packagesView" class="view">
-        <div class="page-title"><em>PACKAGE ECOSYSTEM INTELLIGENCE</em><h1>真实采用，比 Star 更重要</h1><p>发现 npm、PyPI 与 crates.io 开发组件，查看下载量、下游采用、版本、许可证、维护状态，并可直接加入项目对比。</p></div>
+        <div class="page-title"><em data-i18n="packages.eyebrow">PACKAGE ECOSYSTEM INTELLIGENCE</em><h1 data-i18n="packages.title">真实采用，比 Star 更重要</h1><p data-i18n="packages.desc">发现 npm、PyPI 与 crates.io 开发组件，查看下载量、下游采用、版本、许可证、维护状态，并可直接加入项目对比。</p></div>
         <form id="packageSearchForm" class="package-search-box">
-          <div class="quick"><span>⌕</span><input id="packageQuery" placeholder="例如：NPC memory、PDF OCR、workflow automation、procedural generation"></div>
-          <select id="packageEcosystem"><option value="all">全部软件包生态</option><option value="npm">npm</option><option value="pypi">PyPI</option><option value="crates">crates.io</option></select>
-          <select id="packageSort"><option value="downloads">下载量优先</option><option value="dependents">下游采用优先</option><option value="fresh">最近更新</option><option value="score">综合潜力</option></select>
-          <button class="primary">搜索组件</button>
+          <div class="quick"><span>⌕</span><input id="packageQuery" placeholder="例如：NPC memory、PDF OCR、workflow automation、procedural generation" data-i18n-placeholder="packages.searchPlaceholder"></div>
+          <select id="packageEcosystem"><option value="all" data-i18n="filter.allPackages">全部软件包生态</option><option value="npm">npm</option><option value="pypi">PyPI</option><option value="crates">crates.io</option></select>
+          <select id="packageSort"><option value="downloads" data-i18n="sort.downloads">下载量优先</option><option value="dependents" data-i18n="sort.dependents">下游采用优先</option><option value="fresh" data-i18n="sort.fresh">最近更新</option><option value="score" data-i18n="sort.score">综合潜力</option></select>
+          <button class="primary" data-i18n="packages.search">搜索组件</button>
         </form>
-        <div class="package-metrics"><div><b id="packageEntityCount">—</b><span>软件包实体</span></div><div><b id="packageDownloadCount">—</b><span>可见下载量</span></div><div><b id="packageDependentCount">—</b><span>下游采用</span></div><div><b id="packageComparedCount">0</b><span>已加入对比</span></div></div>
+        <div class="package-metrics"><div><b id="packageEntityCount">—</b><span data-i18n="metrics.packages">软件包实体</span></div><div><b id="packageDownloadCount">—</b><span data-i18n="metrics.downloads">可见下载量</span></div><div><b id="packageDependentCount">—</b><span data-i18n="metrics.dependents">下游采用</span></div><div><b id="packageComparedCount">0</b><span data-i18n="metrics.compared">已加入对比</span></div></div>
         <div class="section-title"><div><h2 id="packageTitle">软件包生态雷达</h2><p id="packageDesc">默认展示当前雷达收录的软件包；搜索时直接查询免费公开接口。</p></div><span id="packageStatus">准备加载</span></div>
         <div id="packageSources" class="source-health"></div>
         <div id="packageGrid" class="grid"></div>
       </section>
 
       <section id="compareView" class="view">
-        <div class="page-title split"><div><em>DECISION WORKBENCH</em><h1>多项目一键对比</h1><p>选择2至5个候选，比较许可证、维护、真实采用、可信度、接入简易度和对你的适配度。</p></div><div class="compare-actions"><button id="auditCompare">审计缺失项目</button><button id="clearCompare" class="danger">清空对比</button></div></div>
+        <div class="page-title split"><div><em data-i18n="compare.eyebrow">DECISION WORKBENCH</em><h1 data-i18n="compare.title">多项目一键对比</h1><p data-i18n="compare.desc">选择2至5个候选，比较许可证、维护、真实采用、可信度、接入简易度和对你的适配度。</p></div><div class="compare-actions"><button id="auditCompare" data-i18n="compare.audit">审计缺失项目</button><button id="clearCompare" class="danger" data-i18n="compare.clear">清空对比</button></div></div>
         <div id="compareSelection" class="compare-selection"></div>
-        <div id="compareEmpty" class="empty"><b>▦</b><h3>请选择2至5个项目</h3><p>在任意项目卡点击“加入对比”，可混合比较代码仓库、模型与软件包。</p></div>
+        <div id="compareEmpty" class="empty"><b>▦</b><h3 data-i18n="compare.emptyTitle">请选择2至5个项目</h3><p data-i18n="compare.emptyHint">在任意项目卡点击“加入对比”，可混合比较代码仓库、模型与软件包。</p></div>
         <div id="compareRecommendation"></div>
         <div id="compareTableWrap" class="compare-table-wrap"></div>
       </section>
@@ -100,38 +104,38 @@
       </section>
 
       <section id="watchView" class="view">
-        <div class="page-title"><em>LOCAL HISTORY</em><h1>观察名单与真实增长</h1><p>本地服务器启动时立即采集，之后每6小时扫描五个实时平台；只有历史跨度足够才显示真实涨幅。</p></div>
+        <div class="page-title"><em data-i18n="watch.eyebrow">LOCAL HISTORY</em><h1 data-i18n="watch.title">观察名单与真实增长</h1><p data-i18n="watch.desc">本地服务器启动时立即采集，之后每6小时扫描五个实时平台；只有历史跨度足够才显示真实涨幅。</p></div>
         <div class="history-metrics">
-          <div><b id="historyProjectCount">—</b><span>已追踪项目</span></div>
-          <div><b id="historySampleCount">—</b><span>历史样本</span></div>
-          <div><b id="historyFirst">—</b><span>最早快照</span></div>
-          <div><b id="historyLast">—</b><span>最近快照</span></div>
+          <div><b id="historyProjectCount">—</b><span data-i18n="metrics.tracked">已追踪项目</span></div>
+          <div><b id="historySampleCount">—</b><span data-i18n="metrics.samples">历史样本</span></div>
+          <div><b id="historyFirst">—</b><span data-i18n="metrics.first">最早快照</span></div>
+          <div><b id="historyLast">—</b><span data-i18n="metrics.last">最近快照</span></div>
         </div>
-        <article class="roadmap history-panel"><div class="split"><div><h3>本地历史系统</h3><p id="historyMode">检测中</p></div><button id="collectHistory" class="primary">立即采集一次</button></div><p id="historyNote">正在检测本地服务器。</p><ul><li>24小时榜：历史跨度达到约20小时后才启用</li><li>7天榜：历史跨度达到约6天后才启用</li><li>30天榜：历史跨度达到约25天后才启用</li><li>不同平台分别使用 Stars、Likes 或 Downloads，不把原始数字强行混成同一单位</li><li>本地数据保存在 <code>data/history.json</code>，不会上传到第三方</li></ul></article>
-        <article class="roadmap insight-panel"><div class="split"><div><h3>免费中文大白话</h3><p id="insightMode">检测本地Ollama</p></div><button id="refreshInsights">重新检测</button></div><p id="insightNote">未检测。</p><div class="insight-mini-metrics"><span><b id="insightCount">—</b> 已缓存解读</span><span><b id="insightModel">qwen3:4b</b> 当前模型</span></div><ul><li>所有项目先显示不耗算力的规则摘要</li><li>点击“中文解读”后才调用本地模型，每次只处理一个项目</li><li>生成后保存在 <code>data/insights.json</code>，项目未更新时直接复用</li><li>模型请求结束后立即卸载，避免持续占用显存</li></ul></article>
-        <article class="roadmap trust-overview"><div class="split"><div><h3>免费可信度与供应链初筛</h3><p id="trustMode">检测OpenSSF、deps.dev与OSV本地代理</p></div><span class="provenance rule">规则判断</span></div><p id="trustNote">项目详情页中按需运行，不自动批量请求。自动结果不是安全认证。</p><ul><li>OpenSSF Scorecard：公开安全实践信号</li><li>deps.dev：仓库、软件包、许可证和依赖映射</li><li>OSV：已映射软件包版本的已知漏洞查询</li><li>事实数据、规则判断、本地AI和人工确认分别标识</li></ul></article>
-        <article class="roadmap backup-panel"><div class="split"><div><h3>完整备份与版本迁移</h3><p id="backupMode">检测本地完整备份服务</p></div><div class="backup-actions"><button id="watchExportBackup" class="primary">导出全部</button><button id="watchImportBackup">导入备份</button></div></div><p id="backupNote">完整备份包含收藏、人工纠错、历史、AI解读、可信度报告和Codex研究包。</p><ul><li>导入会替换新版目录中的本地数据，执行前必须确认</li><li>导入完成后需要重启OpenRadar</li><li>建议每次升级前先导出一份完整备份</li></ul></article>
-        <article class="roadmap"><h3>当前与后续路线</h3><ul><li>已完成保守去重、人工合并/拆分/主来源纠错</li><li>已完成免费可信度初筛与完整数据迁移</li><li>已完成 npm、PyPI、crates.io 软件包雷达与2至5项对比器</li><li>收藏项目优先追踪与爆发提醒</li><li>Codex MCP仓库级接入与云端无人值守采集</li></ul></article>
+        <article class="roadmap history-panel"><div class="split"><div><h3 data-i18n="watch.historyTitle">本地历史系统</h3><p id="historyMode">检测中</p></div><button id="collectHistory" class="primary" data-i18n="watch.collect">立即采集一次</button></div><p id="historyNote">正在检测本地服务器。</p><ul><li data-i18n="watch.historyRule1">24小时榜：历史跨度达到约20小时后才启用</li><li data-i18n="watch.historyRule2">7天榜：历史跨度达到约6天后才启用</li><li data-i18n="watch.historyRule3">30天榜：历史跨度达到约25天后才启用</li><li data-i18n="watch.historyRule4">不同平台分别使用 Stars、Likes 或 Downloads，不把原始数字强行混成同一单位</li><li data-i18n="watch.historyRule5">本地数据保存在 <code>data/history.json</code>，不会上传到第三方</li></ul></article>
+        <article class="roadmap insight-panel"><div class="split"><div><h3 data-i18n="watch.insightTitle">免费中文大白话</h3><p id="insightMode">检测本地Ollama</p></div><button id="refreshInsights" data-i18n="watch.redetect">重新检测</button></div><p id="insightNote">未检测。</p><div class="insight-mini-metrics"><span><b id="insightCount">—</b> <span data-i18n="watch.insightCached">已缓存解读</span></span><span><b id="insightModel">qwen3:4b</b> <span data-i18n="watch.model">当前模型</span></span></div><ul><li data-i18n="watch.insightRule1">所有项目先显示不耗算力的规则摘要</li><li data-i18n="watch.insightRule2">点击“中文解读”后才调用本地模型，每次只处理一个项目</li><li data-i18n="watch.insightRule3">生成后保存在 <code>data/insights.json</code>，项目未更新时直接复用</li><li data-i18n="watch.insightRule4">模型请求结束后立即卸载，避免持续占用显存</li></ul></article>
+        <article class="roadmap trust-overview"><div class="split"><div><h3 data-i18n="watch.trustTitle">免费可信度与供应链初筛</h3><p id="trustMode">检测OpenSSF、deps.dev与OSV本地代理</p></div><span class="provenance rule" data-i18n="provenance.rule">规则判断</span></div><p id="trustNote">项目详情页中按需运行，不自动批量请求。自动结果不是安全认证。</p><ul><li data-i18n="watch.trustRule1">OpenSSF Scorecard：公开安全实践信号</li><li data-i18n="watch.trustRule2">deps.dev：仓库、软件包、许可证和依赖映射</li><li data-i18n="watch.trustRule3">OSV：已映射软件包版本的已知漏洞查询</li><li data-i18n="watch.trustRule4">事实数据、规则判断、本地AI和人工确认分别标识</li></ul></article>
+        <article class="roadmap backup-panel"><div class="split"><div><h3 data-i18n="watch.backupTitle">完整备份与版本迁移</h3><p id="backupMode">检测本地完整备份服务</p></div><div class="backup-actions"><button id="watchExportBackup" class="primary" data-i18n="watch.exportAll">导出全部</button><button id="watchImportBackup" data-i18n="watch.import">导入备份</button></div></div><p id="backupNote">完整备份包含收藏、人工纠错、历史、AI解读、可信度报告和Codex研究包。</p><ul><li data-i18n="watch.backupRule1">导入会替换新版目录中的本地数据，执行前必须确认</li><li data-i18n="watch.backupRule2">导入完成后需要重启OpenRadar</li><li data-i18n="watch.backupRule3">建议每次升级前先导出一份完整备份</li></ul></article>
+        <article class="roadmap"><h3 data-i18n="watch.roadmapTitle">当前与后续路线</h3><ul><li data-i18n="watch.roadmap1">已完成保守去重、人工合并/拆分/主来源纠错</li><li data-i18n="watch.roadmap2">已完成免费可信度初筛与完整数据迁移</li><li data-i18n="watch.roadmap3">已完成 npm、PyPI、crates.io 软件包雷达与2至5项对比器</li><li data-i18n="watch.roadmap4">收藏项目优先追踪与爆发提醒</li><li data-i18n="watch.roadmap5">Codex MCP仓库级接入与云端无人值守采集</li></ul></article>
       </section>
     </main>
   </div>
 
   <dialog id="dialog">
     <form id="favoriteForm">
-      <div class="dialog-head"><div><em>SAVE PROJECT</em><h2 id="dialogTitle">收藏项目</h2></div><button type="button" id="closeDialog">×</button></div>
+      <div class="dialog-head"><div><em>SAVE PROJECT</em><h2 id="dialogTitle">收藏项目</h2></div><button type="button" id="closeDialog" aria-label="×">×</button></div>
       <input id="projectId" type="hidden">
-      <label>标签（逗号分隔）<input id="tags" placeholder="办公工具, 立即测试, Codex"></label>
-      <label>备注<textarea id="note" placeholder="它能用在哪里？需要验证什么？"></textarea></label>
-      <label>下一步动作<select id="action"><option value="later">以后研究</option><option value="test">立即测试</option><option value="codex">交给 Codex 分析</option><option value="reference">只参考设计</option></select></label>
-      <div class="dialog-actions"><button type="button" id="cancel">取消</button><button class="primary">保存收藏</button></div>
+      <label><span data-i18n="favorites.tagsLabel">标签（逗号分隔）</span><input id="tags" placeholder="办公工具, 立即测试, Codex" data-i18n-placeholder="favorites.tagsPlaceholder"></label>
+      <label><span data-i18n="favorites.noteLabel">备注</span><textarea id="note" placeholder="它能用在哪里？需要验证什么？" data-i18n-placeholder="favorites.notePlaceholder"></textarea></label>
+      <label><span data-i18n="favorites.actionLabel">下一步动作</span><select id="action"><option value="later" data-i18n="action.later">以后研究</option><option value="test" data-i18n="action.test">立即测试</option><option value="codex" data-i18n="action.codex">交给 Codex 分析</option><option value="reference" data-i18n="action.reference">只参考设计</option></select></label>
+      <div class="dialog-actions"><button type="button" id="cancel" data-i18n="favorites.cancel">取消</button><button class="primary" data-i18n="favorites.save">保存收藏</button></div>
     </form>
   </dialog>
 
   <dialog id="insightDialog" class="insight-dialog">
-    <div class="dialog-head"><div><em>LOCAL AI INSIGHT</em><h2 id="insightTitle">中文大白话解读</h2><p id="insightSubtitle">规则摘要会立即显示，本地AI按需生成。</p></div><button type="button" id="closeInsight">×</button></div>
-    <div id="insightLoading" class="insight-loading" hidden><span></span><div><b>本地模型正在分析</b><p>首次加载模型可能需要几十秒，请不要重复点击。</p></div></div>
+    <div class="dialog-head"><div><em>LOCAL AI INSIGHT</em><h2 id="insightTitle">中文大白话解读</h2><p id="insightSubtitle">规则摘要会立即显示，本地AI按需生成。</p></div><button type="button" id="closeInsight" aria-label="×">×</button></div>
+    <div id="insightLoading" class="insight-loading" hidden><span></span><div><b data-i18n="insight.loadingTitle">本地模型正在分析</b><p data-i18n="insight.loadingHint">首次加载模型可能需要几十秒，请不要重复点击。</p></div></div>
     <div id="insightContent" class="insight-content"></div>
-    <div class="dialog-actions"><button type="button" id="regenerateInsight">重新生成</button><button type="button" id="closeInsightBottom" class="primary">完成</button></div>
+    <div class="dialog-actions"><button type="button" id="regenerateInsight" data-i18n="insight.regenerate">重新生成</button><button type="button" id="closeInsightBottom" class="primary" data-i18n="insight.done">完成</button></div>
   </dialog>
   <div id="toast"></div>
   <script type="module" src="app.js"></script>

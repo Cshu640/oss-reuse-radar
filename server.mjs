@@ -539,7 +539,8 @@ export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = create
           return;
         }
         const ids = (requestUrl.searchParams.get('ids') || '').split(',').map((value) => value.trim()).filter(Boolean).slice(0, 250);
-        json(res, 200, { insights: await insightService.getMany(ids) });
+        const locale = requestUrl.searchParams.get('locale') || 'zh-CN';
+        json(res, 200, { insights: await insightService.getMany(ids, locale) });
         return;
       }
       if (req.method === 'POST' && requestUrl.pathname === '/api/insights/generate') {
@@ -549,7 +550,7 @@ export function createOpenRadarServer({ rootDir = ROOT_DIR, giteeSearch = create
         }
         try {
           const body = await readJsonBody(req, 500_000);
-          const insight = await insightService.generate(body.project, { force: Boolean(body.force) });
+          const insight = await insightService.generate(body.project, { force: Boolean(body.force), locale: body.locale || 'zh-CN' });
           console.log(`[Insights] project=${JSON.stringify(body.project?.id || '')} source=${insight.source} cached=${Boolean(insight.cached)}`);
           json(res, 200, insight);
         } catch (error) {

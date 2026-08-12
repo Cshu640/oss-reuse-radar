@@ -31,7 +31,7 @@ jobs:
       - name: JavaScript syntax
         shell: bash
         run: |
-          for file in *.js *.mjs tests/*.mjs; do
+          for file in *.js *.mjs i18n/*.js tests/*.mjs; do
             node --check "$file"
           done
       - name: JSON checks

@@ -33,6 +33,9 @@ def make_inline_module(source: str) -> str:
 def build_html() -> str:
     html = (ROOT / 'index.html').read_text(encoding='utf-8')
     css = (ROOT / 'styles.css').read_text(encoding='utf-8')
+    i18n_en = make_inline_module((ROOT / 'i18n' / 'en.js').read_text(encoding='utf-8'))
+    i18n_zh = make_inline_module((ROOT / 'i18n' / 'zh-CN.js').read_text(encoding='utf-8'))
+    i18n_index = re.sub(r"^import .*?;\s*$", '', make_inline_module((ROOT / 'i18n' / 'index.js').read_text(encoding='utf-8')), flags=re.MULTILINE)
     adapters = make_inline_module((ROOT / 'platform-adapters.js').read_text(encoding='utf-8'))
     identity = make_inline_module((ROOT / 'project-identity.js').read_text(encoding='utf-8'))
     codex_packet = make_inline_module((ROOT / 'codex-packet.js').read_text(encoding='utf-8'))
@@ -156,8 +159,9 @@ window.addEventListener('load', () => setTimeout(() => {
 }, 250));
 </script>
 '''
-    storage_shim = "const __openRadarStorage = new Map(); const localStorage = { getItem: (key) => __openRadarStorage.has(String(key)) ? __openRadarStorage.get(String(key)) : null, setItem: (key, value) => __openRadarStorage.set(String(key), String(value)), removeItem: (key) => __openRadarStorage.delete(String(key)), clear: () => __openRadarStorage.clear() };"
-    return html.replace('</body>', f'{mock_script}<script>{storage_shim}\n{adapters}\n{identity}\n{codex_packet}\n{comparator}\n{app}</script>{boot_script}</body>')
+    storage_shim = "const __openRadarStorage = new Map(); const localStorage = { getItem: (key) => __openRadarStorage.has(String(key)) ? __openRadarStorage.get(String(key)) : null, setItem: (key, value) => __openRadarStorage.set(String(key), String(value)), removeItem: (key) => __openRadarStorage.delete(String(key)), clear: () => __openRadarStorage.clear() }; localStorage.setItem('openradar:locale:v1', 'zh-CN');"
+    i18n_src = f'{i18n_en}\n{i18n_zh}\n{i18n_index}'
+    return html.replace('</body>', f'{mock_script}<script>{storage_shim}\n{i18n_src}\n{adapters}\n{identity}\n{codex_packet}\n{comparator}\n{app}</script>{boot_script}</body>')
 
 
 def run_viewport(page, width: int, height: int, save_screenshot: bool = False) -> dict:

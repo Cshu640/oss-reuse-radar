@@ -1,7 +1,12 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
+const LEGACY_DEFAULT_LOCALE = 'zh-CN';
+
+function cacheKey(projectId, locale = LEGACY_DEFAULT_LOCALE) {
+  return `${String(projectId || '')}::${locale}`;
+}
 
 function isoNow(now) {
   return new Date(now()).toISOString();
@@ -20,6 +25,7 @@ function cleanStringArray(value, maxItems = 8, maxLength = 220) {
 export function normalizeInsight(value = {}) {
   return {
     projectId: cleanText(value.projectId, 300),
+    locale: ['en', 'zh-CN'].includes(value.locale) ? value.locale : LEGACY_DEFAULT_LOCALE,
     fingerprint: cleanText(value.fingerprint, 128),
     model: cleanText(value.model, 120),
     source: ['ollama', 'rule-fallback'].includes(value.source) ? value.source : 'ollama',
@@ -57,6 +63,7 @@ export class InsightStore {
         updatedAt: parsed.updatedAt || null,
         insights: parsed?.insights && typeof parsed.insights === 'object' ? parsed.insights : {},
       };
+      this.#migrateLegacyKeys();
     } catch (error) {
       if (error?.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error;
       this.data = { version: SCHEMA_VERSION, updatedAt: null, insights: {} };
@@ -76,27 +83,40 @@ export class InsightStore {
     };
   }
 
-  async get(projectId) {
+  #migrateLegacyKeys() {
+    if (!this.data || !this.data.insights) return;
+    for (const [key, item] of Object.entries(this.data.insights)) {
+      if (key.includes('::') || !item) continue;
+      const localeKey = cacheKey(key, LEGACY_DEFAULT_LOCALE);
+      if (this.data.insights[localeKey]) continue;
+      this.data.insights[localeKey] = normalizeInsight({ ...item, projectId: key, locale: LEGACY_DEFAULT_LOCALE });
+    }
+  }
+
+  async get(projectId, locale = LEGACY_DEFAULT_LOCALE) {
     await this.init();
-    const item = this.data.insights[String(projectId || '')];
+    const normalizedLocale = ['en', 'zh-CN'].includes(locale) ? locale : LEGACY_DEFAULT_LOCALE;
+    let item = this.data.insights[cacheKey(projectId, normalizedLocale)];
+    if (!item && normalizedLocale === LEGACY_DEFAULT_LOCALE) item = this.data.insights[String(projectId || '')];
     return item ? normalizeInsight(item) : null;
   }
 
-  async getMany(projectIds = []) {
+  async getMany(projectIds = [], locale = LEGACY_DEFAULT_LOCALE) {
     await this.init();
     const result = {};
     for (const projectId of projectIds) {
-      const item = this.data.insights[String(projectId || '')];
+      const item = await this.get(projectId, locale);
       if (item) result[projectId] = normalizeInsight(item);
     }
     return result;
   }
 
-  async set(projectId, insight) {
+  async set(projectId, insight, locale = LEGACY_DEFAULT_LOCALE) {
     await this.init();
-    const normalized = normalizeInsight({ ...insight, projectId });
+    const normalizedLocale = ['en', 'zh-CN'].includes(locale) ? locale : LEGACY_DEFAULT_LOCALE;
+    const normalized = normalizeInsight({ ...insight, projectId, locale: normalizedLocale });
     if (!normalized.projectId || !normalized.summary) throw new Error('Insight requires projectId and summary');
-    this.data.insights[normalized.projectId] = normalized;
+    this.data.insights[cacheKey(normalized.projectId, normalizedLocale)] = normalized;
     this.data.updatedAt = isoNow(this.now);
     await this.#persist();
     return normalized;

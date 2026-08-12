@@ -55,6 +55,12 @@ function applyDocumentLocale(locale) {
   renderInsightStatus();
   renderServiceStatuses();
   if (state.activeDetailId) renderDetail();
+  state.insights = {};
+  void loadCachedInsights([...state.projects, ...state.favorites], state.locale);
+  if (els.insightDialog?.open && state.activeInsightId) {
+    const active = findProject(state.activeInsightId);
+    if (active) renderInsightDetails(active, projectInsight(active));
+  }
 }
 
 function setLocale(locale) {
@@ -1594,9 +1600,19 @@ function renderInsightStatus() {
         : tt('status.insightStatic');
   }
   if (els.insightNote) {
-    els.insightNote.textContent = state.insightServiceAvailable
-      ? `${status.message || tt('watch.insightEnabled')}${store.insightCount ? tt('status.insightCacheCount', { count: store.insightCount }) : tt('status.insightNoCache')}`
-      : tt('status.insightStaticNeed');
+    let base = '';
+    if (state.insightServiceAvailable) {
+      if (state.insightAvailable) {
+        base = status.modelInstalled === false
+          ? tt('status.insightModelMissing', { model: status.model || 'qwen3:4b' })
+          : tt('status.insightConnected', { model: status.model || 'qwen3:4b' });
+      } else {
+        base = tt('status.insightUnreachable');
+      }
+      els.insightNote.textContent = `${base}${store.insightCount ? tt('status.insightCacheCount', { count: store.insightCount }) : tt('status.insightNoCache')}`;
+    } else {
+      els.insightNote.textContent = tt('status.insightStaticNeed');
+    }
   }
 }
 
@@ -1614,12 +1630,12 @@ async function loadInsightStatus(force = false) {
   renderInsightStatus();
 }
 
-async function loadCachedInsights(projects) {
+async function loadCachedInsights(projects, locale = state.locale) {
   if (!state.insightServiceAvailable) return;
   const ids = unique(projects.flatMap((project) => entityLookupIds(project))).filter((id) => !state.insights[id]).slice(0, 250);
   if (!ids.length) return;
   try {
-    const response = await fetchJsonSafe(`/api/insights?ids=${encodeURIComponent(ids.join(','))}`);
+    const response = await fetchJsonSafe(`/api/insights?ids=${encodeURIComponent(ids.join(','))}&locale=${encodeURIComponent(locale)}`);
     const received = response.insights || {};
     if (!Object.keys(received).length) return;
     state.insights = { ...state.insights, ...received };
@@ -1627,6 +1643,10 @@ async function loadCachedInsights(projects) {
     renderFavorites();
     if (state.results.length) renderResults();
     if (state.activeDetailId) renderDetail();
+    if (els.insightDialog?.open && state.activeInsightId) {
+      const active = findProject(state.activeInsightId);
+      if (active) renderInsightDetails(active, projectInsight(active));
+    }
   if (document.getElementById('packagesView')?.classList.contains('active')) renderPackageRadar();
   if (document.getElementById('compareView')?.classList.contains('active')) renderCompare();
   } catch {
@@ -1688,7 +1708,7 @@ async function generateProjectInsight(project, force = false) {
     const insight = await fetchJsonSafe('/api/insights/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project, force }),
+      body: JSON.stringify({ project, force, locale: state.locale }),
     });
     state.insights[project.id] = insight;
     renderInsightDetails(project, insight);
@@ -2115,7 +2135,7 @@ function init() {
       await loadCachedInsights([...state.projects, ...state.results, ...state.favorites]);
       els.refreshInsights.disabled = false;
       els.refreshInsights.textContent = tt('status.recheck');
-      toast(state.insightAvailable ? tt('status.insightOllamaReady') : (state.insightStatus?.message || tt('status.insightNotReady')));
+      toast(state.insightAvailable ? tt('status.insightOllamaReady') : tt('status.insightNotReady'));
     };
   }
 

@@ -1331,7 +1331,7 @@ function renderCompare() {
   if (!els.compareSelection) return;
   const items = liveCompareItems();
   state.compareItems = items;
-  const report = compareProjects(items, state.trustReports);
+  const report = compareProjects(items, state.trustReports, undefined, state.locale);
   els.compareCount.textContent = items.length;
   els.packageComparedCount.textContent = items.length;
   els.compareSelection.innerHTML = items.map((project) => `<article class="compare-chip"><div><b>${escapeHtml(project.name)}</b><span>${escapeHtml(project.owner || '')} · ${escapeHtml(entitySources(project).map((source) => platformMeta(source).shortLabel).join(' + '))}</span></div><div><button data-detail="${escapeHtml(projectKey(project))}">${tt('compare.details')}</button><button data-remove-compare="${escapeHtml(projectKey(project))}">×</button></div></article>`).join('');

@@ -7,6 +7,24 @@ const DEFAULT_WEIGHTS = {
   simplicity: 10,
 };
 
+const DEFAULT_LOCALE = 'zh-CN';
+
+function t(key, locale = DEFAULT_LOCALE, params = {}) {
+  const resources = {
+    en: {
+      'compare.recommendWinner': 'Currently recommended: {name}. It ranks highest on license, maintenance, real adoption, trust signals, integration simplicity, and use-case fit. Read the README, license, and dependency audit before adoption.',
+      'compare.recommendEmpty': 'Choose 2 to 5 projects to compare.',
+    },
+    'zh-CN': {
+      'compare.recommendWinner': '当前更推荐 {name}：综合许可证、维护、真实采用、可信度信号、接入简易度和对用户的适配度得分最高。正式采用前仍需阅读README、许可证和依赖审计。',
+      'compare.recommendEmpty': '请先选择2至5个项目。',
+    },
+  };
+  const table = resources[locale] || resources[DEFAULT_LOCALE];
+  const template = table[key] || table[key] || key;
+  return String(template).replace(/\{(\w+)\}/g, (match, name) => (Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : match));
+}
+
 function number(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -103,7 +121,7 @@ export function comparisonFacts(project, trustReport = null) {
   };
 }
 
-export function compareProjects(items = [], trustReports = {}, weights = DEFAULT_WEIGHTS) {
+export function compareProjects(items = [], trustReports = {}, weights = DEFAULT_WEIGHTS, locale = DEFAULT_LOCALE) {
   const rows = items.slice(0, 5).map((project) => {
     const ids = [project?.entityId, project?.id, ...(project?.aliases || [])].filter(Boolean);
     const trust = ids.map((id) => trustReports[id]).find(Boolean) || null;
@@ -117,8 +135,8 @@ export function compareProjects(items = [], trustReports = {}, weights = DEFAULT
     rows,
     winner,
     recommendation: winner
-      ? `当前更推荐 ${winner.facts.owner ? `${winner.facts.owner}/` : ''}${winner.facts.name}：综合许可证、维护、真实采用、可信度信号、接入简易度和对用户的适配度得分最高。正式采用前仍需阅读README、许可证和依赖审计。`
-      : '请先选择2至5个项目。',
+      ? t('compare.recommendWinner', locale, { name: `${winner.facts.owner ? `${winner.facts.owner}/` : ''}${winner.facts.name}` })
+      : t('compare.recommendEmpty', locale),
     weights: { ...weights },
   };
 }

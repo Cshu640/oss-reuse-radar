@@ -2,9 +2,27 @@
 
 > Discover, evaluate, and reuse open-source projects instead of rebuilding from scratch.
 
+**English** · [简体中文说明](README.md)
+
 Open Source Radar is a local-first discovery and evaluation tool for open-source projects, models, and software packages. It combines goal-oriented search, local history, conservative cross-platform identity matching, trust signals, project comparison, and Codex research-packet export in one runnable workspace.
 
 It is not another GitHub Trending clone. A ranking is only one input. The product keeps source records separate, shows when growth is backed by local history, distinguishes facts from rules and AI explanations, and helps a person decide whether a project is worth reusing.
+
+## Screenshots
+
+The interface is available in English and Simplified Chinese. The screenshots
+below are real captures from a local run of the app (deterministic demo data
+only; live upstream results depend on your network and the providers).
+
+| Main radar | Project detail + insight |
+| --- | --- |
+| ![English main radar](docs/screenshots/radar-en.png) | ![English project detail](docs/screenshots/detail-en.png) |
+
+| Project compare | Simplified Chinese main radar |
+| --- | --- |
+| ![English project compare](docs/screenshots/compare-en.png) | ![简体中文主视图](docs/screenshots/radar-zh.png) |
+
+The Chinese UI mirrors the same views and features.
 
 ## Current capabilities
 
@@ -87,16 +105,16 @@ The current artifact still needs user-facing live acceptance for all upstream so
 - Trust signals are risk signals, not security certification, and a missing
   result is not proof of safety.
 - Upstream availability varies by network and may require a proxy.
-- Real UI screenshots are pending capture before launch.
+- The screenshots in this README were captured from the real local interface
+  using built-in demo data; they do not imply live provider availability.
 
 ## Contributing and license
 
 Please read `CONTRIBUTING.md`, `SECURITY.md`, and `CODE_OF_CONDUCT.md` before opening an issue or pull request. The repository code is MIT-licensed as documented in `LICENSE`, subject to the source/data caveats in the ledger. That ledger is engineering documentation, not legal advice.
 
-The project is currently a local v0.1.0 release candidate and has no verified
-public adoption or maintenance history. Publishing still requires the user's
-explicit approval. Do not interpret the local OSS readiness score as an OpenAI
-score or as an application endorsement. The release-gate audit is recorded in
-`docs/PUBLIC_RELEASE_GATE.md`.
+The project is in public beta (`v0.1.0`). It has no verified external adoption
+or maintenance history yet; do not interpret the local OSS readiness score as
+an OpenAI score or as an application endorsement. The release-gate audit is
+recorded in `docs/PUBLIC_RELEASE_GATE.md`.
 
 For the existing Chinese product notes and API details, see `README.md`.

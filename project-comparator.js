@@ -7,9 +7,9 @@ const DEFAULT_WEIGHTS = {
   simplicity: 10,
 };
 
-const DEFAULT_LOCALE = 'zh-CN';
+const COMPARATOR_DEFAULT_LOCALE = 'zh-CN';
 
-function t(key, locale = DEFAULT_LOCALE, params = {}) {
+function t(key, locale = COMPARATOR_DEFAULT_LOCALE, params = {}) {
   const resources = {
     en: {
       'compare.recommendWinner': 'Currently recommended: {name}. It ranks highest on license, maintenance, real adoption, trust signals, integration simplicity, and use-case fit. Read the README, license, and dependency audit before adoption.',
@@ -20,7 +20,7 @@ function t(key, locale = DEFAULT_LOCALE, params = {}) {
       'compare.recommendEmpty': '请先选择2至5个项目。',
     },
   };
-  const table = resources[locale] || resources[DEFAULT_LOCALE];
+  const table = resources[locale] || resources[COMPARATOR_DEFAULT_LOCALE];
   const template = table[key] || table[key] || key;
   return String(template).replace(/\{(\w+)\}/g, (match, name) => (Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : match));
 }
@@ -121,7 +121,7 @@ export function comparisonFacts(project, trustReport = null) {
   };
 }
 
-export function compareProjects(items = [], trustReports = {}, weights = DEFAULT_WEIGHTS, locale = DEFAULT_LOCALE) {
+export function compareProjects(items = [], trustReports = {}, weights = DEFAULT_WEIGHTS, locale = COMPARATOR_DEFAULT_LOCALE) {
   const rows = items.slice(0, 5).map((project) => {
     const ids = [project?.entityId, project?.id, ...(project?.aliases || [])].filter(Boolean);
     const trust = ids.map((id) => trustReports[id]).find(Boolean) || null;

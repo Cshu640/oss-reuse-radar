@@ -9,7 +9,7 @@ const DEFAULT_WEIGHTS = {
 
 const COMPARATOR_DEFAULT_LOCALE = 'zh-CN';
 
-function t(key, locale = COMPARATOR_DEFAULT_LOCALE, params = {}) {
+function compareT(key, locale = COMPARATOR_DEFAULT_LOCALE, params = {}) {
   const resources = {
     en: {
       'compare.recommendWinner': 'Currently recommended: {name}. It ranks highest on license, maintenance, real adoption, trust signals, integration simplicity, and use-case fit. Read the README, license, and dependency audit before adoption.',
@@ -135,8 +135,8 @@ export function compareProjects(items = [], trustReports = {}, weights = DEFAULT
     rows,
     winner,
     recommendation: winner
-      ? t('compare.recommendWinner', locale, { name: `${winner.facts.owner ? `${winner.facts.owner}/` : ''}${winner.facts.name}` })
-      : t('compare.recommendEmpty', locale),
+      ? compareT('compare.recommendWinner', locale, { name: `${winner.facts.owner ? `${winner.facts.owner}/` : ''}${winner.facts.name}` })
+      : compareT('compare.recommendEmpty', locale),
     weights: { ...weights },
   };
 }

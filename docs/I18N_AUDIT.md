@@ -228,6 +228,45 @@ OSS-0T.3 completed the bilingual copy for generated content:
   console errors; no untranslated keys or undefined/null copy. No remote AI
   was called; no AI success was faked.
 
+## OSS-0T.4 bilingual visual acceptance and README screenshots (2026-08-12)
+
+OSS-0T.4 completed the final visual acceptance and real README screenshots:
+
+- Final visual acceptance run with Playwright + system Edge against a real
+  local server (deterministic demo seed data, no live upstream): English and
+  Simplified Chinese both passed home/radar, 14 categories, filters, project
+  cards, detail, rule insight, AI insight status, favorites, compare,
+  package radar, language switch, reload persistence; no layout overflow,
+  no undefined/null copy, zero page/console errors.
+- One real P1 blocker found and fixed with a minimal change: the English
+  compare view showed a Chinese recommendation because
+  `project-comparator.js` generated it directly. `compareProjects()` now
+  accepts a locale and returns a localized recommendation ("Currently
+  recommended: ..." / "当前更推荐 ..."); the UI passes the active locale.
+  No other product behavior changed.
+- Real screenshots captured at 1440x900 from the running app and committed
+  to `docs/screenshots/`: `radar-en.png`, `detail-en.png`,
+  `compare-en.png`, `radar-zh.png`. Data source is the built-in deterministic
+  demo seed (repos / OpenDigger / repo-pulse), not fabricated live data.
+- README.en.md gained a screenshots section and an English / Simplified
+  Chinese language navigation; README.md gained the reverse navigation; the
+  stale "local release candidate / publishing still requires approval" copy
+  was corrected to public beta v0.1.0. No adoption, badge, benchmark, or
+  performance claims were added.
+- Onboarding recheck: Node + optional Python, `node server.mjs`, launchers,
+  `http://localhost:8080`, optional local Ollama, optional server-only
+  `GITHUB_TOKEN`, proxy env vars, beta limitations, and security reporting
+  path all match the repository.
+- Private Vulnerability Reporting: still `pending_manual_enablement` (not
+  visible in the GitHub API `security_and_analysis`); not claimed as enabled.
+- Tests: Node 31/31; JS/MJS syntax, Python py_compile, JSON validation,
+  git diff --check all pass. Security scan: no tokens, credentials, personal
+  paths, or browser privacy data in screenshots or new files.
+- Git: committed to `docs/readme-visuals` (local only); no push, merge, tag,
+  or release; `v0.1.0` unchanged. OSS-0T.4 PR ready; v0.2.0 release
+  candidate not declared because screenshots/onboarding are docs-only and
+  public adoption evidence is still absent.
+
 ## Security boundary
 
 No API key, token, personal directory, device configuration, telemetry, or
